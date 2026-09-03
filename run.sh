@@ -20,9 +20,9 @@
 #SBATCH -n 1
 #SBATCH -c 16
 #SBATCH -t 4:00:00
-#SBATCH -q standby
-#SBATCH -p a10
+#SBATCH -A gpu
 
+#SBATCH --constraint=J
 #SBATCH --mem=128G
 #SBATCH --gres=gpu:1
 #SBATCH --signal=B:TERM@300
