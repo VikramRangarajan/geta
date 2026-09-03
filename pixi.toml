@@ -1,0 +1,28 @@
+[workspace]
+authors = ["Vikram Rangarajan <rangarav@purdue.edu>"]
+channels = ["conda-forge"]
+name = "geta"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+
+[feature.geta]
+channels = ["pytorch", "nvidia", "conda-forge", "main", "r", "msys2"]
+
+[feature.geta.dependencies]
+python = "3.9.*"
+pytorch = "==2.2.0"
+torchvision = ">=0.15.0,<0.20.0"
+numpy = "<2.0.0"
+matplotlib = ">=3.5.0"
+scikit-image = ">=0.19.0"
+pip = "*"
+
+[feature.geta.pypi-dependencies]
+pipreqs = ">=0.5.0"
+
+[environments]
+geta = { features = ["geta"], no-default-feature = true }

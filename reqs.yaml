@@ -1,0 +1,16 @@
+name: geta
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.9
+  - pytorch==2.2.0
+  - torchvision>=0.15.0,<0.20.0
+  - numpy<2.0.0  # Important: numpy 2.x is incompatible with PyTorch 2.2.0
+  - matplotlib>=3.5.0
+  - scikit-image>=0.19.0
+  - pip
+  - pip:
+    - pipreqs>=0.5.0  # For generating requirements.txt 
