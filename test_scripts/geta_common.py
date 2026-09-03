@@ -10,7 +10,11 @@ def repo_root():
 
 def bootstrap_paths():
     root = repo_root()
-    for p in (root, os.path.join(root, "test_scripts"), os.path.join(root, "tutorials")):
+    for p in (
+        root,
+        os.path.join(root, "test_scripts"),
+        os.path.join(root, "tutorials"),
+    ):
         if p not in sys.path:
             sys.path.insert(0, p)
     return root
@@ -20,7 +24,9 @@ def resolve_output_dir(explicit=None, label="run"):
     if explicit:
         out = explicit
     else:
-        out = os.environ.get("GETA_OUTPUT_DIR", os.path.join(repo_root(), "outputs", label))
+        out = os.environ.get(
+            "GETA_OUTPUT_DIR", os.path.join(repo_root(), "outputs", label)
+        )
     os.makedirs(out, exist_ok=True)
     return out
 

@@ -20,8 +20,8 @@
 #SBATCH -n 1
 #SBATCH -c 16
 #SBATCH -t 4:00:00
-#SBATCH -q standby
-#SBATCH -p a10
+#SBATCH -A scholar
+#SBATCH -p gpu
 #SBATCH --constraint=J
 #SBATCH --mem=128G
 #SBATCH --gres=gpu:1
@@ -47,6 +47,9 @@ term_handler()
         echo "Requeueing!"
         cp -v "${outfile}" "${outfile%.out}_${restarts}.out"
         scontrol requeue "${SLURM_JOB_ID}"
+        # Release if requeue puts job on hold (BeginTime) due to RequeueHold
+        sleep 2
+        scontrol release "${SLURM_JOB_ID}" 2>/dev/null || true
         exit 0
     else
         echo "Your job is over the Maximun restarts limit"

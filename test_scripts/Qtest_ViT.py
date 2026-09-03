@@ -124,7 +124,8 @@ def get_bitwidth_dict(param_dict):
     return bit_dict
 
 
-def get_data_loader(dataset: str, batch_size: int, num_workers: int):
+def get_data_loader(dataset: str, batch_size: int, num_workers: int, data_dir=None):
+    data_dir = resolve_data_dir(data_dir)
     size = 384 # for VIT TIMM
     if dataset == "cifar10":
         transform_train = transforms.Compose([
@@ -256,7 +257,7 @@ def main(config):
         torch.cuda.manual_seed(seed)
 
     train_loader, test_loader, input_size = get_data_loader(
-        dataset, batch_size * num_gpus, num_workers
+        dataset, batch_size * num_gpus, num_workers, data_dir
     )
     # num_classes = 10 if dataset == "cifar10" else 1000
     dummy_input = torch.rand(input_size).to(device)

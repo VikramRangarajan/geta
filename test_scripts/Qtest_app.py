@@ -232,7 +232,8 @@ def compute_bop_compression_ratio(
     return bop_compression_ratio, total_original_mac, total_compressed_mac
 
 
-def get_data_loader(dataset: str, batch_size: int, num_workers: int):
+def get_data_loader(dataset: str, batch_size: int, num_workers: int, data_dir=None):
+    data_dir = resolve_data_dir(data_dir)
     if dataset == "cifar10":
         transform_train = transforms.Compose(
             [
@@ -345,7 +346,7 @@ def main(
     output_dir = resolve_output_dir(output_dir, f"{dataset}_{model_name}")
 
     train_loader, test_loader, input_size = get_data_loader(
-        dataset, batch_size * num_gpus, num_workers
+        dataset, batch_size * num_gpus, num_workers, data_dir
     )
     num_classes = 10 if dataset == "cifar10" else 1000
     dummy_input = torch.rand(input_size).to(device)
