@@ -10,9 +10,15 @@ import warnings
 import argparse
 import json
 
-sys.path.append("..")
-sys.path.append(".")
-sys.path.append("/home/xiaoyi/otov2/otov2_auto_structured_pruning/")
+from geta_common import (
+    add_common_args,
+    bootstrap_paths,
+    load_check_accuracy,
+    resolve_data_dir,
+    resolve_output_dir,
+)
+
+bootstrap_paths()
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -27,7 +33,10 @@ from tqdm import tqdm
 from logging import FileHandler
 from logging import Formatter
 # from transformers import AutoImageProcessor
-from utils.utils import check_accuracy
+try:
+    from utils.utils import check_accuracy
+except ImportError:
+    check_accuracy = load_check_accuracy()
 
 from only_train_once import OTO
 from sanity_check.backends.vgg7 import vgg7_bn
@@ -41,7 +50,18 @@ warnings.filterwarnings("ignore")
 # Set up logging
 output_logger = logging.getLogger("wasted_meerkats.messaging")
 
-import mlflow
+try:
+    import mlflow
+except ImportError:
+
+    class _NoMlflow:
+        def __getattr__(self, name):
+            def _noop(*args, **kwargs):
+                return None
+
+            return _noop
+
+    mlflow = _NoMlflow()
 
 
 class StreamingDataset(IterableDataset):
@@ -273,10 +293,16 @@ def get_data_loader(dataset: str, batch_size: int, num_workers: int):
             ]
         )
         trainset = CIFAR10(
-            root="cifar10", train=True, download=True, transform=transform_train
+            root=os.path.join(data_dir, "cifar10"),
+            train=True,
+            download=True,
+            transform=transform_train,
         )
         testset = CIFAR10(
-            root="cifar10", train=False, download=True, transform=transform_test
+            root=os.path.join(data_dir, "cifar10"),
+            train=False,
+            download=True,
+            transform=transform_test,
         )
         input_size = (1, 3, 32, 32)
         train_loader = DataLoader(
@@ -382,7 +408,9 @@ def main(config):
     LOG_LEVEL = logging.INFO
 
     # Messaging logger
-    log_dir = os.path.join("outputs", "logs")
+    output_dir = resolve_output_dir(config.output_dir, f"{model_name}_{variant}_{sparsity}")
+    data_dir = resolve_data_dir(config.data_dir)
+    log_dir = os.path.join(output_dir, "logs")
     os.makedirs(log_dir, exist_ok=True)
     MESSAGING_LOG_FILE = os.path.join(log_dir, f"{model_name}_{variant}_{sparsity}_{pruning_start_step}.txt")
     
@@ -563,7 +591,7 @@ def main(config):
     
 
     # Construct the subnet and get the compressed model
-    oto.construct_subnet(out_dir='./cache')
+    oto.construct_subnet(out_dir=os.path.join(output_dir, "subnet"))
     compressed_model = torch.load(oto.compressed_model_path)
     oto_compressed = OTO(compressed_model, dummy_input)
     
@@ -699,7 +727,7 @@ def get_config():
     parser.add_argument("--ablation", type=str, default="qhesso", help="ablation experiment name")
         
     # Parse arguments
-    config = parser.parse_args()
+    config = add_common_args(parser).parse_args()
 
     #scale lr wd with batch size
     if config.batch_size != 64:

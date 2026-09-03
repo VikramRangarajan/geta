@@ -10,9 +10,14 @@ import os
 import sys
 import warnings
 
-sys.path.append("..")
-sys.path.append(".")
-sys.path.append("/home/xiaoyi/otov2/otov2_auto_structured_pruning/")
+from geta_common import (
+    add_common_args,
+    bootstrap_paths,
+    load_check_accuracy,
+    resolve_data_dir,
+)
+
+bootstrap_paths()
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -28,8 +33,16 @@ from torchvision.datasets import CIFAR10
 from tqdm import tqdm
 
 # from transformers import AutoImageProcessor
-from utils.utils import check_accuracy
-from common.utils import create_exp_dir
+try:
+    from utils.utils import check_accuracy
+except ImportError:
+    from geta_common import load_check_accuracy
+
+    check_accuracy = load_check_accuracy()
+try:
+    from common.utils import create_exp_dir
+except ImportError:
+    from geta_common import create_exp_dir
 
 from only_train_once import OTO
 from only_train_once.quantization.quant_model import model_to_quantize_model
@@ -139,10 +152,16 @@ def get_data_loader(dataset: str, batch_size: int, num_workers: int, args: None)
             ]
         )
         trainset = CIFAR10(
-            root="cifar10", train=True, download=True, transform=transform_train
+            root=os.path.join(resolve_data_dir(getattr(config, "data_dir", None)), "cifar10"),
+            train=True,
+            download=True,
+            transform=transform_train,
         )
         testset = CIFAR10(
-            root="cifar10", train=False, download=True, transform=transform_test
+            root=os.path.join(resolve_data_dir(getattr(config, "data_dir", None)), "cifar10"),
+            train=False,
+            download=True,
+            transform=transform_test,
         )
         input_size = (1, 3, 32, 32)
         train_loader = DataLoader(
@@ -263,6 +282,7 @@ def main(config):
     # )
     # logger = logging.getLogger(__name__)
     logger = create_exp_dir(config, 'outputs', 'qvit_imagenet')
+    output_dir = os.path.dirname(logger.handlers[0].baseFilename)
 
     # Setup info
     logger.info(f"Model name: {model_name:^s}")
@@ -436,7 +456,7 @@ def main(config):
         if accuracy1 > best_acc1 and config.local_rank == 0:
             best_acc1 = accuracy1
             best_epoch = epoch
-            torch.save(model, "./best_acc1.pt")
+            torch.save(model, os.path.join(output_dir, "best_acc1.pt"))
 
         loss_list.append(running_loss_avg)
 
@@ -445,7 +465,7 @@ def main(config):
 
     # Construct the subnet and get the compressed model
     if config.local_rank == 0:
-        oto.construct_subnet(out_dir="./cache")
+        oto.construct_subnet(out_dir=os.path.join(output_dir, "subnet"))
         compressed_model = torch.load(oto.compressed_model_path)
         oto_compressed = OTO(compressed_model.to(device), dummy_input.to(device))
 
@@ -604,7 +624,7 @@ def get_config():
     parser.add_argument("--train_dir", type=str, default="", help="Training data directory")
     parser.add_argument("--test_dir", type=str, default="", help="Testing data directory")
     # Parse arguments
-    config = parser.parse_args()
+    config = add_common_args(parser).parse_args()
 
     return config
 

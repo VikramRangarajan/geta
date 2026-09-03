@@ -10,9 +10,15 @@ import os
 import sys
 import warnings
 
-sys.path.append("..")
-sys.path.append(".")
-sys.path.append("/home/xiaoyi/otov2/otov2_auto_structured_pruning/")
+from geta_common import (
+    add_common_args,
+    bootstrap_paths,
+    load_check_accuracy,
+    resolve_data_dir,
+    resolve_output_dir,
+)
+
+bootstrap_paths()
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -27,7 +33,10 @@ from torchvision.datasets import CIFAR10
 from tqdm import tqdm
 
 # from transformers import AutoImageProcessor
-from utils.utils import check_accuracy
+try:
+    from utils.utils import check_accuracy
+except ImportError:
+    check_accuracy = load_check_accuracy()
 
 from only_train_once import OTO
 from only_train_once.quantization.quant_model import model_to_quantize_model
@@ -132,10 +141,16 @@ def get_data_loader(dataset: str, batch_size: int, num_workers: int):
             transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
         ])
         trainset = CIFAR10(
-            root="cifar10", train=True, download=True, transform=transform_train
+            root=os.path.join(data_dir, "cifar10"),
+            train=True,
+            download=True,
+            transform=transform_train,
         )
         testset = CIFAR10(
-            root="cifar10", train=False, download=True, transform=transform_test
+            root=os.path.join(data_dir, "cifar10"),
+            train=False,
+            download=True,
+            transform=transform_test,
         )
         input_size = (1, 3, size, size)
         train_loader = DataLoader(
@@ -210,9 +225,11 @@ def main(config):
     seed = config.seed
 
     assert pruning_start_step == projection_start_step + projection_steps
+    output_dir = resolve_output_dir(config.output_dir, f"{model_name}_{variant}_{sparsity_level}")
+    data_dir = resolve_data_dir(config.data_dir)
     # Logging configuration
     logging.basicConfig(
-        filename=f"./{model_name}_{variant}_{sparsity_level}_{pruning_start_step}.txt",
+        filename=os.path.join(output_dir, f"{model_name}_{variant}_{sparsity_level}_{pruning_start_step}.txt"),
         filemode="a",
         format="%(message)s",
         level=logging.INFO,
@@ -351,7 +368,7 @@ def main(config):
             model.module if num_gpus > 1 else model, test_loader, two_input=False
         )
         avg_wt_bit = oto.compute_average_bit_width()
-        with open("./metrics_info.txt", "a") as f1:
+        with open(os.path.join(output_dir, "metrics_info.txt"), "a") as f1:
             f1.write(f"Epoch: {epoch}, loss: {running_loss_avg:5.3f}, norm_all: {opt_metrics.norm_params:5.2f}, grp_sparsity: {opt_metrics.group_sparsity:5.2f}, acc1: {accuracy1:5.2f}%, acc5: {accuracy5:5.2f}%, norm_import: {opt_metrics.norm_important_groups:5.2f}, norm_redund: {opt_metrics.norm_redundant_groups:5.2f}, num_grp_import: {opt_metrics.num_important_groups:5.2f}, num_grp_redund: {opt_metrics.num_redundant_groups:5.2f}, avg_wt_bit_width: {avg_wt_bit:5.2f}")
             # opt_metrics_epoch = optimizer.compute_metrics()
          
@@ -362,7 +379,7 @@ def main(config):
         if accuracy1 > best_acc1:
             best_acc1 = accuracy1
             best_epoch = epoch
-            torch.save(model, "./simpleViT_best_acc1.pt")
+            torch.save(model, os.path.join(output_dir, "simpleViT_best_acc1.pt"))
 
         loss_list.append(running_loss_avg)
 
@@ -370,7 +387,7 @@ def main(config):
     logger.info("Training completed. Constructing subnet...")
 
     # Construct the subnet and get the compressed model
-    oto.construct_subnet(out_dir="./cache")
+    oto.construct_subnet(out_dir=os.path.join(output_dir, "subnet"))
     compressed_model = torch.load(oto.compressed_model_path)
     oto_compressed = OTO(compressed_model, dummy_input)
 
@@ -527,7 +544,7 @@ def get_config():
     parser.add_argument("--seed", type=int, default=0, help="Random seed")
 
     # Parse arguments
-    config = parser.parse_args()
+    config = add_common_args(parser).parse_args()
 
     return config
 

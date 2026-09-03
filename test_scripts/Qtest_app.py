@@ -3,9 +3,9 @@ import math
 import os
 import sys
 
-sys.path.append("..")
-sys.path.append(".")
-sys.path.append("/home/davidaponte/otov2_auto_structured_pruning/")
+from geta_common import bootstrap_paths, load_check_accuracy, resolve_data_dir, resolve_output_dir
+
+bootstrap_paths()
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -19,7 +19,10 @@ from torch.utils.data import DataLoader, IterableDataset
 from torchvision.datasets import CIFAR10
 from tqdm import tqdm
 from transformers import AutoImageProcessor
-from utils.utils import check_accuracy
+try:
+    from utils.utils import check_accuracy
+except ImportError:
+    check_accuracy = load_check_accuracy()
 
 from only_train_once import OTO
 from only_train_once.quantization.quant_model import model_to_quantize_model
@@ -250,10 +253,16 @@ def get_data_loader(dataset: str, batch_size: int, num_workers: int):
             ]
         )
         trainset = CIFAR10(
-            root="cifar10", train=True, download=True, transform=transform_train
+            root=os.path.join(resolve_data_dir(data_dir), "cifar10"),
+            train=True,
+            download=True,
+            transform=transform_train,
         )
         testset = CIFAR10(
-            root="cifar10", train=False, download=True, transform=transform_test
+            root=os.path.join(resolve_data_dir(data_dir), "cifar10"),
+            train=False,
+            download=True,
+            transform=transform_test,
         )
         input_size = (1, 3, 32, 32)
         train_loader = DataLoader(
@@ -320,8 +329,12 @@ def main(
     variant: str = typer.Option("sgd", help="Optimizer variant"),
     seed: int = typer.Option(1, help="Random seed"),
     output_dir: str = typer.Option(
-        "/home/davidaponte/otov2_auto_structured_pruning/tutorials",
-        help="Output directory for models",
+        None,
+        help="Output directory for models (default: <repo>/outputs/<dataset>_<model_name>)",
+    ),
+    data_dir: str = typer.Option(
+        None,
+        help="Data directory (default: <repo>/data or $GETA_DATA_DIR)",
     ),
 ):
     torch.manual_seed(seed)
@@ -329,7 +342,7 @@ def main(
     num_gpus = torch.cuda.device_count()
     if device.type == "cuda":
         torch.cuda.manual_seed(seed)
-    output_dir = f"{output_dir}/{dataset}_{model_name}"
+    output_dir = resolve_output_dir(output_dir, f"{dataset}_{model_name}")
 
     train_loader, test_loader, input_size = get_data_loader(
         dataset, batch_size * num_gpus, num_workers

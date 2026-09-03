@@ -10,9 +10,15 @@ import os
 import sys
 import warnings
 
-sys.path.append("..")
-sys.path.append(".")
-sys.path.append("/home/xiaoyi/otov2/otov2_auto_structured_pruning/")
+from geta_common import (
+    add_common_args,
+    bootstrap_paths,
+    load_check_accuracy,
+    resolve_data_dir,
+    resolve_output_dir,
+)
+
+bootstrap_paths()
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -27,9 +33,13 @@ from torchvision.datasets import CIFAR10
 from tqdm import tqdm
 
 # from transformers import AutoImageProcessor
-from utils.utils import check_accuracy
+try:
+    from utils.utils import check_accuracy
+except ImportError:
+    check_accuracy = load_check_accuracy()
 
 from only_train_once import OTO
+from only_train_once.quantization.quant_layers import QuantizationMode
 from only_train_once.quantization.quant_model import model_to_quantize_model
 from sanity_check.backends.vgg7 import vgg7_bn
 from sanity_check.backends.resnet20_cifar10 import resnet56_cifar10
@@ -278,10 +288,16 @@ def get_data_loader(dataset: str, batch_size: int, num_workers: int):
             ]
         )
         trainset = CIFAR10(
-            root="cifar10", train=True, download=True, transform=transform_train
+            root=os.path.join(data_dir, "cifar10"),
+            train=True,
+            download=True,
+            transform=transform_train,
         )
         testset = CIFAR10(
-            root="cifar10", train=False, download=True, transform=transform_test
+            root=os.path.join(data_dir, "cifar10"),
+            train=False,
+            download=True,
+            transform=transform_test,
         )
         input_size = (1, 3, 32, 32)
         train_loader = DataLoader(
@@ -352,9 +368,11 @@ def main(config):
     seed = config.seed
 
     assert pruning_start_step == projection_start_step + projection_steps
+    output_dir = resolve_output_dir(config.output_dir, f"{model_name}_{variant}_{sparsity_level}")
+    data_dir = resolve_data_dir(config.data_dir)
     # Logging configuration
     logging.basicConfig(
-        filename=f"./log_new/{model_name}_{variant}_{sparsity_level}_{pruning_start_step}.txt",
+        filename=os.path.join(output_dir, f"{model_name}_{variant}_{sparsity_level}_{pruning_start_step}.txt"),
         filemode="a",
         format="%(message)s",
         level=logging.INFO,
@@ -388,7 +406,10 @@ def main(config):
 
     if model_name == "vgg7bn":
         model = vgg7_bn()
-        q_model = model_to_quantize_model(model)
+        # Paper Table 4: VGG7 uses weight + activation quantization
+        q_model = model_to_quantize_model(
+            model, quant_mode=QuantizationMode.WEIGHT_AND_ACTIVATION
+        )
     elif model_name == "resnet56":
         model = resnet56_cifar10()
         q_model = model_to_quantize_model(model)
@@ -402,7 +423,7 @@ def main(config):
     optimizer = oto.geta(
         variant=variant,
         lr=learning_rate,
-        lr_quant=1e-3,
+        lr_quant=1e-4,
         first_momentum=0.9,
         weight_decay=weight_decay,
         target_group_sparsity=sparsity_level,
@@ -495,7 +516,7 @@ def main(config):
         if accuracy1 > best_acc1:
             best_acc1 = accuracy1
             best_epoch = epoch
-            torch.save(model, "./log_new/vgg7bn_best_acc1.pt")
+            torch.save(model, os.path.join(output_dir, "vgg7bn_best_acc1.pt"))
 
         loss_list.append(running_loss_avg)
 
@@ -503,7 +524,7 @@ def main(config):
     logger.info("Training completed. Constructing subnet...")
 
     # Construct the subnet and get the compressed model
-    oto.construct_subnet(out_dir="./cache")
+    oto.construct_subnet(out_dir=os.path.join(output_dir, "subnet"))
     compressed_model = torch.load(oto.compressed_model_path)
     oto_compressed = OTO(compressed_model, dummy_input)
 
@@ -597,7 +618,7 @@ def main(config):
     ax.set_xticks(index + bar_width * (len(items) - 1) / 2)
     ax.set_xticklabels(categories)
     ax.legend()
-    plt.savefig(f"./log_new/{model_name}_bitwidth.pdf")
+    plt.savefig(os.path.join(output_dir, f"{model_name}_bitwidth.pdf"))
 
 
 def get_config():
@@ -676,7 +697,7 @@ def get_config():
     parser.add_argument("--seed", type=int, default=0, help="Random seed")
 
     # Parse arguments
-    config = parser.parse_args()
+    config = add_common_args(parser).parse_args()
 
     return config
 
