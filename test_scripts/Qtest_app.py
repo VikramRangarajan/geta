@@ -1,13 +1,16 @@
 import logging
 import math
 import os
-import sys
 
-from geta_common import bootstrap_paths, load_check_accuracy, resolve_data_dir, resolve_output_dir
+from geta_common import (
+    bootstrap_paths,
+    load_check_accuracy,
+    resolve_data_dir,
+    resolve_output_dir,
+)
 
 bootstrap_paths()
 
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
@@ -19,6 +22,7 @@ from torch.utils.data import DataLoader, IterableDataset
 from torchvision.datasets import CIFAR10
 from tqdm import tqdm
 from transformers import AutoImageProcessor
+
 try:
     from utils.utils import check_accuracy
 except ImportError:
@@ -389,7 +393,7 @@ def main(
         model.train()
         running_loss = 0.0
         for batch_idx, batch in enumerate(
-            tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs}")
+            tqdm(train_loader, desc=f"Epoch {epoch + 1}/{epochs}")
         ):
             if dataset == "imagenet":
                 inputs, targets = batch["pixel_values"], batch["labels"]

@@ -265,7 +265,7 @@ def main(config):
     dummy_input = torch.rand(input_size).to(device)
         
     model = simpleViT_cifar10()
-    q_model = model_to_quantize_model(model,init_bit=init_bit)
+    q_model = model_to_quantize_model(model, num_bits=init_bit)
     oto = OTO(q_model.to(device), dummy_input=dummy_input)
     oto.mark_unprunable_by_param_names(["to_patch_embedding.2.weight"])
 

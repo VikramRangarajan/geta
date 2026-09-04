@@ -95,13 +95,13 @@ case "${GETA_JOB}" in
             --pruning_start_step 20 --pruning_periods 10 --pruning_steps 30 \
             --variant adam --bit_reduction 2 --min_bit 4 --max_bit 16 --seed 0"
         ;;
-    # Paper Fig 4 context: ResNet56 on CIFAR10 (200 epochs)
+    # Paper Fig 4 ablation: ResNet56 CIFAR10 from scratch (Fig4a 94.61%, Fig4b sparsity sweep) — ResNet family schedule like Tab7 ResNet20
     resnet56-cifar10)
         SCRIPT="test_scripts/Qtest_resnet56_ablation.py"
         ARGS="--model_name resnet56 --dataset cifar10 --batch_size 64 --epochs 200 \
             --lr 0.1 --lr_quant 1e-4 --weight_decay 1e-4 --sparsity 0.5 \
-            --projection_start_step 0 --projection_periods 5 --projection_steps 20 \
-            --pruning_start_step 20 --pruning_periods 10 --pruning_steps 30 \
+            --projection_start_step 0 --projection_periods 7 --projection_steps 35 \
+            --pruning_start_step 35 --pruning_periods 5 --pruning_steps 30 \
             --variant sgd --bit_reduction 2 --min_bit_wt 4 --max_bit_wt 16 --seed 0"
         ;;
     # Paper Table 6: SimpleViT on CIFAR10 (100 epochs)
