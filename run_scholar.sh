@@ -15,7 +15,13 @@
 #
 # Paper hyper-parameters are from Table 7 of geta.pdf.
 # Valid GETA_JOB values: resnet20-cifar10, vgg7-cifar10, resnet56-cifar10,
-#   simplevit-cifar10, vit-imagenet, deit-imagenet, swin-imagenet
+#   simplevit-cifar10, vit-imagenet, deit-imagenet, swin-imagenet,
+#   resnet20-cifar10-qapp, vgg7-cifar10-qapp
+# The -qapp jobs run the same paper targets via test_scripts/Qtest_app.py
+# (typer CLI). Qtest_app.py:367-377 only exposes a subset of Table 7 knobs
+# (no projection B/Kb, no bit range, no lr_quant, weight-only quant), so these
+# are closest-possible mappings, not exact reproductions. Prefer the
+# non-qapp jobs for paper fidelity.
 
 #SBATCH -n 1
 #SBATCH -c 16
@@ -75,9 +81,15 @@ IMAGENET_ROOT="/scratch/gilbreth/wang4094/imagenet"
 
 if [[ -z "${GETA_JOB:-}" ]]; then
     echo "ERROR: set GETA_JOB to one of: resnet20-cifar10, vgg7-cifar10,"
-    echo "  resnet56-cifar10, simplevit-cifar10, vit-imagenet, deit-imagenet, swin-imagenet"
+    echo "  resnet56-cifar10, simplevit-cifar10, vit-imagenet, deit-imagenet, swin-imagenet,"
+    echo "  resnet20-cifar10-qapp, vgg7-cifar10-qapp"
     exit 2
 fi
+
+# Qtest_app.py is typer-based (single command: bare [OPTIONS], hyphenated flags);
+# argparse scripts take underscore flags. Default to argparse mode.
+IS_TYPER=0
+TYPER_SUBCMD=""
 
 case "${GETA_JOB}" in
     # Paper Table 2: ResNet20 on CIFAR10 (weight-only, SGD lr=0.1, 350 epochs)
@@ -129,6 +141,36 @@ case "${GETA_JOB}" in
             --init_bit 16 --seed 0 \
             --train_dir ${IMAGENET_ROOT}/train --test_dir ${IMAGENET_ROOT}/val"
         ;;
+    # Table 2 via Qtest_app.py (closest possible: weight-only is correct for
+    # Tab 2, but Qtest_app.py:369-377 hardcodes projection/bit-range/lr_quant
+    # defaults, so B=7/Kb=35/br=2/[4,16]/lr_quant=1e-4 are NOT settable).
+    # Timeline mapping: --pruningstep 35 ~= Kb=35 projection epochs, then
+    # P=5/Kp=30 pruning, 350 epochs total, SGD lr=0.1 per Appendix C.
+    resnet20-cifar10-qapp)
+        IS_TYPER=1
+        TYPER_SUBCMD=""
+        SCRIPT="test_scripts/Qtest_app.py"
+        ARGS="--model-name resnet20 --dataset cifar10 --batch-size 64 --epochs 350 \
+            --learning-rate 0.1 --weight-decay 1e-4 --sparsity-level 0.35 \
+            --pruningstep 35 --pruning-periods 5 --pruning-steps 30 \
+            --lr-step 100 --lr-gamma 0.1 --log-interval 100 --eval-interval 1 \
+            --variant sgd --num-workers 4 --seed 0"
+        ;;
+    # Table 4 via Qtest_app.py (closest possible, STILL weight-only:
+    # Qtest_app.py:367 always calls model_to_quantize_model(model) which
+    # defaults to WEIGHT_ONLY, while Tab 4 needs weight+activation).
+    # Timeline mapping: --pruningstep 20 ~= Kb=20, then P=10/Kp=30,
+    # 200 epochs total, Adam lr=1e-3 per Appendix C.
+    vgg7-cifar10-qapp)
+        IS_TYPER=1
+        TYPER_SUBCMD=""
+        SCRIPT="test_scripts/Qtest_app.py"
+        ARGS="--model-name vgg7bn --dataset cifar10 --batch-size 64 --epochs 200 \
+            --learning-rate 1e-3 --weight-decay 1e-4 --sparsity-level 0.7 \
+            --pruningstep 20 --pruning-periods 10 --pruning-steps 30 \
+            --lr-step 100 --lr-gamma 0.1 --log-interval 100 --eval-interval 1 \
+            --variant adam --num-workers 4 --seed 0"
+        ;;
     *)
         echo "ERROR: unknown GETA_JOB='${GETA_JOB}'"
         exit 2
@@ -151,8 +193,74 @@ nvidia-smi --query-gpu=name,memory.total --format=csv 2>/dev/null || true
 
 cd "${WORK_DIR}"
 # shellcheck disable=SC2086
-pixi --no-progress run --environment geta --manifest-path "${REPO_ROOT}/pixi.toml" \
-    python "${REPO_ROOT}/${SCRIPT}" ${ARGS} \
-    --output_dir "${OUT_DIR}" --data_dir "${DATA_DIR}" &
+if [[ "${IS_TYPER}" == "1" ]]; then
+    # Runtime-only workaround for the Qtest_app.py eval bug (no test_scripts
+    # edits): Qtest_app.py passes `device` as the 3rd positional arg of
+    # check_accuracy(model, loader, two_input=False), so eval calls
+    # model(X, X). ResNet forwards take (x) only -> TypeError; VGG7 takes
+    # (x, *args) so it survives. Pre-seed sys.modules['utils.utils'] via
+    # sitecustomize so the import in Qtest_app.py picks up a
+    # (model, loader, device=None) compatible wrapper. Training math untouched.
+    SHIM_DIR="${WORK_DIR}/qapp_shim"
+    mkdir -p "${SHIM_DIR}"
+    cat > "${SHIM_DIR}/sitecustomize.py" <<'PYEOF'
+import sys as _sys
+import types as _types
+
+
+def _install_qapp_check_accuracy():
+    try:
+        import torch as _torch
+    except Exception:
+        return
+
+    def check_accuracy(model, testloader, device=None, two_input=False):
+        # device may be a torch.device passed positionally by Qtest_app.py;
+        # it is NOT the two_input flag.
+        if isinstance(device, _torch.device):
+            pass
+        elif isinstance(device, bool):
+            two_input = device
+        model = model.eval()
+        dev = next(model.parameters()).device
+        c1 = c5 = tot = 0
+        with _torch.no_grad():
+            for batch in testloader:
+                if isinstance(batch, dict):
+                    X = batch["pixel_values"].to(dev)
+                    y = batch["labels"].to(dev)
+                else:
+                    X, y = batch
+                    X = X.to(dev)
+                    y = y.to(dev)
+                y_pred = model(X, X) if two_input else model(X)
+                tot += y.size(0)
+                _, pred = y_pred.topk(5, 1, True, True)
+                pred = pred.t()
+                corr = pred.eq(y.view(1, -1).expand_as(pred))
+                c1 += corr[:1].reshape(-1).float().sum().item() * 100.0 / y.size(0)
+                c5 += corr[:5].reshape(-1).float().sum().item() * 100.0 / y.size(0)
+        model = model.train()
+        return c1 / tot, c5 / tot
+
+    pkg = _types.ModuleType("utils")
+    pkg.__path__ = []
+    mod = _types.ModuleType("utils.utils")
+    mod.check_accuracy = check_accuracy
+    _sys.modules.setdefault("utils", pkg)
+    _sys.modules["utils.utils"] = mod
+
+
+_install_qapp_check_accuracy()
+PYEOF
+    export PYTHONPATH="${SHIM_DIR}${PYTHONPATH:+:${PYTHONPATH}}"
+    pixi --no-progress run --environment geta --manifest-path "${REPO_ROOT}/pixi.toml" \
+        python "${REPO_ROOT}/${SCRIPT}" ${TYPER_SUBCMD} ${ARGS} \
+        --output-dir "${OUT_DIR}" --data-dir "${DATA_DIR}" &
+else
+    pixi --no-progress run --environment geta --manifest-path "${REPO_ROOT}/pixi.toml" \
+        python "${REPO_ROOT}/${SCRIPT}" ${ARGS} \
+        --output_dir "${OUT_DIR}" --data_dir "${DATA_DIR}" &
+fi
 wait $!
 echo "=== GETA job '${GETA_JOB}' finished at $(date) ==="

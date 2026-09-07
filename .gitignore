@@ -213,3 +213,5 @@ __marimo__/
 data/
 logs/
 outputs
+graphify-out
+.zed

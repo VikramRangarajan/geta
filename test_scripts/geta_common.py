@@ -2,6 +2,7 @@ import importlib.util
 import logging
 import os
 import sys
+from torch.utils.data import DataLoader, IterableDataset
 
 
 def repo_root():
@@ -72,3 +73,23 @@ def create_exp_dir(config, outputs="outputs", exp_name="exp"):
         sh.setFormatter(logging.Formatter("%(asctime)s - %(message)s"))
         logger.addHandler(sh)
     return logger
+
+class StreamingDataset(IterableDataset):
+    def __init__(
+        self, hf_dataset, preprocess_func, length, max_samples_per_epoch=100000
+    ):
+        self.hf_dataset = hf_dataset
+        self.preprocess_func = preprocess_func
+        self.length = length
+        self.max_samples_per_epoch = max_samples_per_epoch
+
+    def __iter__(self):
+        count = 0
+        for example in self.hf_dataset:
+            if self.max_samples_per_epoch and count >= self.max_samples_per_epoch:
+                break
+            yield self.preprocess_func(example)
+            count += 1
+
+    def __len__(self):
+        return self.length
