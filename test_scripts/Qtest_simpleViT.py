@@ -36,7 +36,11 @@ from only_train_once.quantization.quant_model import model_to_quantize_model
 from sanity_check.backends.vgg7 import vgg7_bn
 from sanity_check.backends.resnet20_cifar10 import resnet56_cifar10
 from sanity_check.backends.simple_vit import simpleViT_cifar10
-from only_train_once.optimizer.utils import save_checkpoint, load_checkpoint, scan_checkpoint
+from only_train_once.optimizer.utils import (
+    save_checkpoint,
+    load_checkpoint,
+    scan_checkpoint,
+)
 
 # Ignore warnings
 warnings.filterwarnings("ignore")
@@ -198,13 +202,18 @@ def main(config):
     seed = config.seed
 
     assert pruning_start_step == projection_start_step + projection_steps
-    output_dir = resolve_output_dir(config.output_dir, f"{model_name}_{variant}_{sparsity_level}")
+    output_dir = resolve_output_dir(
+        config.output_dir, f"{model_name}_{variant}_{sparsity_level}"
+    )
     data_dir = resolve_data_dir(config.data_dir)
     checkpoint_dir = os.path.join(output_dir, "checkpoints")
     os.makedirs(checkpoint_dir, exist_ok=True)
     # Logging configuration
     logging.basicConfig(
-        filename=os.path.join(output_dir, f"{model_name}_{variant}_{sparsity_level}_{pruning_start_step}.txt"),
+        filename=os.path.join(
+            output_dir,
+            f"{model_name}_{variant}_{sparsity_level}_{pruning_start_step}.txt",
+        ),
         filemode="a",
         format="%(message)s",
         level=logging.INFO,
@@ -265,7 +274,6 @@ def main(config):
         # max_bit_act=max_bit_act,
     )
 
-
     # Get full/original floating-point model MACs, BOPs, and number of parameters
     full_macs = oto.compute_macs(in_million=True, layerwise=True)
     full_bops = oto.compute_bops(in_million=True, layerwise=True)
@@ -290,7 +298,10 @@ def main(config):
     best_acc1 = 0.0
     loss_list = []
     start_epoch = 0
-    if os.environ.get("TRAINER_RESUME") == "1" or os.environ.get("SLURM_RESTART_COUNT", "0") != "0":
+    if (
+        os.environ.get("TRAINER_RESUME") == "1"
+        or os.environ.get("SLURM_RESTART_COUNT", "0") != "0"
+    ):
         ckpt_path = scan_checkpoint(checkpoint_dir, "ckpt_")
         if ckpt_path is not None:
             try:
@@ -299,7 +310,25 @@ def main(config):
                 model_to_load = model.module if num_gpus > 1 else model
                 model_to_load.load_state_dict(ckpt["model_state_dict"])
                 opt_state = ckpt.get("optimizer_state_dict", {})
-                for key in ["num_steps", "curr_pruning_period", "start_pruning_step", "pruning_periods", "pruning_steps", "start_projection_step", "projection_periods", "projection_steps", "pruning_period_duration", "projection_period_duration", "target_num_redundant_groups", "pruned_group_idxes", "bit_layers", "min_bit_wt", "max_bit_wt", "min_bit_act", "max_bit_act"]:
+                for key in [
+                    "num_steps",
+                    "curr_pruning_period",
+                    "start_pruning_step",
+                    "pruning_periods",
+                    "pruning_steps",
+                    "start_projection_step",
+                    "projection_periods",
+                    "projection_steps",
+                    "pruning_period_duration",
+                    "projection_period_duration",
+                    "target_num_redundant_groups",
+                    "pruned_group_idxes",
+                    "bit_layers",
+                    "min_bit_wt",
+                    "max_bit_wt",
+                    "min_bit_act",
+                    "max_bit_act",
+                ]:
                     if key in opt_state:
                         try:
                             setattr(optimizer, key, opt_state[key])
@@ -308,12 +337,20 @@ def main(config):
                 try:
                     ckpt_groups = opt_state.get("param_groups", [])
                     for pg, ckpt_pg in zip(optimizer.param_groups, ckpt_groups):
-                        for k in ["important_idxes", "active_redundant_idxes", "pruned_idxes", "importance_scores"]:
+                        for k in [
+                            "important_idxes",
+                            "active_redundant_idxes",
+                            "pruned_idxes",
+                            "importance_scores",
+                        ]:
                             if k in ckpt_pg:
                                 pg[k] = ckpt_pg[k]
                 except Exception as e:
                     logger.warning(f"Could not restore param_groups: {e}")
-                if "scheduler_state_dict" in ckpt and ckpt["scheduler_state_dict"] is not None:
+                if (
+                    "scheduler_state_dict" in ckpt
+                    and ckpt["scheduler_state_dict"] is not None
+                ):
                     try:
                         lr_scheduler.load_state_dict(ckpt["scheduler_state_dict"])
                     except Exception as e:
@@ -321,10 +358,13 @@ def main(config):
                 start_epoch = ckpt["epoch"] + 1
                 best_acc1 = ckpt.get("best_acc1", 0.0)
                 best_epoch = ckpt.get("best_epoch", 0)
-                logger.info(f"Resumed from epoch {start_epoch} (ckpt epoch {ckpt['epoch']}), best_acc1={best_acc1:.2f}%")
+                logger.info(
+                    f"Resumed from epoch {start_epoch} (ckpt epoch {ckpt['epoch']}), best_acc1={best_acc1:.2f}%"
+                )
             except Exception as e:
                 logger.warning(f"Failed to resume from checkpoint {ckpt_path}: {e}")
                 import traceback
+
                 logger.warning(traceback.format_exc())
                 start_epoch = 0
 
@@ -332,7 +372,7 @@ def main(config):
         model.train()
         running_loss = 0.0
         for batch_idx, batch in enumerate(
-            tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs}")
+            tqdm(train_loader, desc=f"Epoch {epoch + 1}/{epochs}")
         ):
             if dataset == "imagenet":
                 inputs, targets = batch["pixel_values"], batch["labels"]
@@ -385,7 +425,9 @@ def main(config):
             torch.save(model, os.path.join(output_dir, "simpleViT_best_acc1.pt"))
         # Save checkpoint for resume (every epoch)
         try:
-            ckpt = optimizer.create_checkpoint(model.module if num_gpus > 1 else model, epoch, running_loss_avg)
+            ckpt = optimizer.create_checkpoint(
+                model.module if num_gpus > 1 else model, epoch, running_loss_avg
+            )
             ckpt["best_acc1"] = best_acc1
             ckpt["best_epoch"] = best_epoch
             try:
@@ -393,7 +435,10 @@ def main(config):
             except:
                 ckpt["scheduler_state_dict"] = None
             save_checkpoint(os.path.join(checkpoint_dir, f"ckpt_{epoch}.pt"), ckpt)
-            ckpts = sorted([f for f in os.listdir(checkpoint_dir) if f.startswith("ckpt_")], key=lambda x: int(x.split("_")[-1].split(".")[0]))
+            ckpts = sorted(
+                [f for f in os.listdir(checkpoint_dir) if f.startswith("ckpt_")],
+                key=lambda x: int(x.split("_")[-1].split(".")[0]),
+            )
             for old in ckpts[:-3]:
                 try:
                     os.remove(os.path.join(checkpoint_dir, old))

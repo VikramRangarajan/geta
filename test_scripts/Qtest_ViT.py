@@ -39,7 +39,10 @@ from only_train_once.quantization.quant_model import model_to_quantize_model
 from sanity_check.backends.vgg7 import vgg7_bn
 from sanity_check.backends.resnet20_cifar10 import resnet56_cifar10
 from sanity_check.backends.simple_vit import simpleViT_cifar10
-from sanity_check.backends.vision_transformer.vision_transformer import vit_base_patch16_384, vit_small_patch16_224
+from sanity_check.backends.vision_transformer.vision_transformer import (
+    vit_base_patch16_384,
+    vit_small_patch16_224,
+)
 
 
 # Ignore warnings
@@ -101,21 +104,29 @@ def get_bitwidth_dict(param_dict):
 
 def get_data_loader(dataset: str, batch_size: int, num_workers: int, data_dir=None):
     data_dir = resolve_data_dir(data_dir)
-    size = 384 # for VIT TIMM
+    size = 384  # for VIT TIMM
     if dataset == "cifar10":
-        transform_train = transforms.Compose([
-            transforms.RandomCrop(32, padding=4),
-            transforms.Resize(size),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-        ])
+        transform_train = transforms.Compose(
+            [
+                transforms.RandomCrop(32, padding=4),
+                transforms.Resize(size),
+                transforms.RandomHorizontalFlip(),
+                transforms.ToTensor(),
+                transforms.Normalize(
+                    (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)
+                ),
+            ]
+        )
 
-        transform_test = transforms.Compose([
-            transforms.Resize(size),
-            transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-        ])
+        transform_test = transforms.Compose(
+            [
+                transforms.Resize(size),
+                transforms.ToTensor(),
+                transforms.Normalize(
+                    (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)
+                ),
+            ]
+        )
         trainset = CIFAR10(
             root=os.path.join(data_dir, "cifar10"),
             train=True,
@@ -201,11 +212,16 @@ def main(config):
     seed = config.seed
 
     assert pruning_start_step == projection_start_step + projection_steps
-    output_dir = resolve_output_dir(config.output_dir, f"{model_name}_{variant}_{sparsity_level}")
+    output_dir = resolve_output_dir(
+        config.output_dir, f"{model_name}_{variant}_{sparsity_level}"
+    )
     data_dir = resolve_data_dir(config.data_dir)
     # Logging configuration
     logging.basicConfig(
-        filename=os.path.join(output_dir, f"{model_name}_{variant}_{sparsity_level}_{pruning_start_step}.txt"),
+        filename=os.path.join(
+            output_dir,
+            f"{model_name}_{variant}_{sparsity_level}_{pruning_start_step}.txt",
+        ),
         filemode="a",
         format="%(message)s",
         level=logging.INFO,
@@ -244,10 +260,7 @@ def main(config):
 
     q_model = model_to_quantize_model(model, num_bits=init_bit)
     oto = OTO(q_model.to(device), dummy_input=dummy_input)
-    oto.mark_unprunable_by_param_names(
-        ['patch_embed.proj.weight',
-            'pos_embed']
-    )
+    oto.mark_unprunable_by_param_names(["patch_embed.proj.weight", "pos_embed"])
     # Add the visualization to make sure that everything quant_act_layers.py works well.
     # oto.visualize(view=False, out_dir='./cache', display_flops=True, display_params=True, display_macs=True)
     # exit()
@@ -271,7 +284,6 @@ def main(config):
         # min_bit_act=min_bit_act,
         # max_bit_act=max_bit_act,
     )
-
 
     # Get full/original floating-point model MACs, BOPs, and number of parameters
     full_macs = oto.compute_macs(in_million=True, layerwise=True)
@@ -301,7 +313,7 @@ def main(config):
         model.train()
         running_loss = 0.0
         for batch_idx, batch in enumerate(
-            tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs}")
+            tqdm(train_loader, desc=f"Epoch {epoch + 1}/{epochs}")
         ):
             if dataset == "imagenet":
                 inputs, targets = batch["pixel_values"], batch["labels"]
@@ -345,7 +357,9 @@ def main(config):
         )
         avg_wt_bit = oto.compute_average_bit_width()
         with open(os.path.join(output_dir, "metrics_info.txt"), "a") as f1:
-            f1.write(f"Epoch: {epoch}, loss: {running_loss_avg:5.3f}, norm_all: {opt_metrics.norm_params:5.2f}, grp_sparsity: {opt_metrics.group_sparsity:5.2f}, acc1: {accuracy1:5.2f}%, acc5: {accuracy5:5.2f}%, norm_import: {opt_metrics.norm_important_groups:5.2f}, norm_redund: {opt_metrics.norm_redundant_groups:5.2f}, num_grp_import: {opt_metrics.num_important_groups:5.2f}, num_grp_redund: {opt_metrics.num_redundant_groups:5.2f}, avg_wt_bit_width: {avg_wt_bit:5.2f}")
+            f1.write(
+                f"Epoch: {epoch}, loss: {running_loss_avg:5.3f}, norm_all: {opt_metrics.norm_params:5.2f}, grp_sparsity: {opt_metrics.group_sparsity:5.2f}, acc1: {accuracy1:5.2f}%, acc5: {accuracy5:5.2f}%, norm_import: {opt_metrics.norm_important_groups:5.2f}, norm_redund: {opt_metrics.norm_redundant_groups:5.2f}, num_grp_import: {opt_metrics.num_important_groups:5.2f}, num_grp_redund: {opt_metrics.num_redundant_groups:5.2f}, avg_wt_bit_width: {avg_wt_bit:5.2f}"
+            )
             # opt_metrics_epoch = optimizer.compute_metrics()
 
         logger.info(
@@ -460,9 +474,7 @@ def get_config():
     parser.add_argument(
         "--epochs", type=int, default=1, help="Number of epochs to train"
     )
-    parser.add_argument(
-        "--lr", type=float, default=1e-3, help="Initial learning rate"
-    )
+    parser.add_argument("--lr", type=float, default=1e-3, help="Initial learning rate")
     parser.add_argument(
         "--lr_quant", type=float, default=1e-3, help="Initial learning rate"
     )

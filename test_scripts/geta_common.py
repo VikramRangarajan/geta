@@ -9,6 +9,7 @@ from utils.utils import check_accuracy
 def repo_root():
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+
 def resolve_output_dir(explicit=None, label="run"):
     if explicit:
         out = explicit
@@ -47,6 +48,7 @@ def create_exp_dir(config, outputs="outputs", exp_name="exp"):
         sh.setFormatter(logging.Formatter("%(asctime)s - %(message)s"))
         logger.addHandler(sh)
     return logger
+
 
 class StreamingDataset(IterableDataset):
     def __init__(

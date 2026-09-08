@@ -15,7 +15,7 @@ from .geta_common import (
     bootstrap_paths,
     resolve_data_dir,
     check_accuracy,
-    create_exp_dir
+    create_exp_dir,
 )
 
 bootstrap_paths()
@@ -47,6 +47,7 @@ warnings.filterwarnings("ignore")
 # Set up logging
 logger = logging.getLogger("new")
 
+
 def get_dist_info(args):
     try:
         args.rank = int(os.environ["RANK"])
@@ -59,6 +60,7 @@ def get_dist_info(args):
         args.num_gpus = 1
     return args
 
+
 def prepare_dist_model(model, args):
     model = model.cpu()
     torch.cuda.set_device(args.local_rank)
@@ -66,7 +68,8 @@ def prepare_dist_model(model, args):
     model = model.to(torch.cuda.current_device())
     if args.num_gpus > 1:
         model = torch.nn.parallel.DistributedDataParallel(
-                module=model, broadcast_buffers=False, device_ids=[args.local_rank])
+            module=model, broadcast_buffers=False, device_ids=[args.local_rank]
+        )
     return model
 
 
@@ -161,24 +164,32 @@ def get_data_loader(dataset: str, batch_size: int, num_workers: int, args: None)
         )
     elif dataset == "imagenet":
         input_size = (1, 3, 224, 224)
-        transform_train = transforms.Compose([
-            transforms.RandomResizedCrop(224),
-            transforms.RandomHorizontalFlip(),
-            transforms.ColorJitter(
-                brightness=0.4,
-                contrast=0.4,
-                saturation=0.4,
-                hue=0.2),
-            transforms.ToTensor(),
-            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),])
+        transform_train = transforms.Compose(
+            [
+                transforms.RandomResizedCrop(224),
+                transforms.RandomHorizontalFlip(),
+                transforms.ColorJitter(
+                    brightness=0.4, contrast=0.4, saturation=0.4, hue=0.2
+                ),
+                transforms.ToTensor(),
+                transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+            ]
+        )
 
-        transform_test = transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),])
-        train_set = torchvision.datasets.ImageFolder(root=args.train_dir, transform=transform_train)
-        test_set = torchvision.datasets.ImageFolder(root=args.test_dir, transform=transform_test)
+        transform_test = transforms.Compose(
+            [
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
+                transforms.ToTensor(),
+                transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+            ]
+        )
+        train_set = torchvision.datasets.ImageFolder(
+            root=args.train_dir, transform=transform_train
+        )
+        test_set = torchvision.datasets.ImageFolder(
+            root=args.test_dir, transform=transform_test
+        )
 
         if args.ddp:
             train_sampler = DistributedSampler(train_set)
@@ -188,12 +199,22 @@ def get_data_loader(dataset: str, batch_size: int, num_workers: int, args: None)
             val_sampler = None
 
         train_loader = torch.utils.data.DataLoader(
-            train_set, batch_size=batch_size, shuffle=(train_sampler is None),
-            num_workers=8, pin_memory=True, sampler=train_sampler)
+            train_set,
+            batch_size=batch_size,
+            shuffle=(train_sampler is None),
+            num_workers=8,
+            pin_memory=True,
+            sampler=train_sampler,
+        )
 
         test_loader = torch.utils.data.DataLoader(
-            test_set, batch_size=batch_size, shuffle=False,
-            num_workers=8, pin_memory=True, sampler=val_sampler)
+            test_set,
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=8,
+            pin_memory=True,
+            sampler=val_sampler,
+        )
 
     else:
         raise ValueError("Unsupported dataset")
@@ -270,7 +291,7 @@ def main(config):
     #     level=logging.INFO,
     # )
     # logger = logging.getLogger(__name__)
-    logger = create_exp_dir(config, 'outputs', 'qvit_imagenet')
+    logger = create_exp_dir(config, "outputs", "qvit_imagenet")
     output_dir = os.path.dirname(logger.handlers[0].baseFilename)
 
     # Setup info
@@ -302,38 +323,44 @@ def main(config):
     dummy_input = torch.rand(input_size)
 
     if model_name == "vit":
-        from sanity_check.backends.vision_transformer.vision_transformer import vit_small_patch16_224
+        from sanity_check.backends.vision_transformer.vision_transformer import (
+            vit_small_patch16_224,
+        )
+
         model = vit_small_patch16_224(pretrained=True, num_classes=1000)
     elif model_name == "deit":
         from sanity_check.backends.vision_transformer.DeiT import deit_tiny_patch16_224
+
         model = deit_tiny_patch16_224(pretrained=True, num_classes=1000)
     elif model_name == "pvt":
         from sanity_check.backends.vision_transformer.PVT import pvt_v2_b0
+
         model = pvt_v2_b0(pretrained=True, num_classes=1000)
     elif model_name == "swin":
-        from sanity_check.backends.vision_transformer.Swin import swin_tiny_patch4_window7_224
+        from sanity_check.backends.vision_transformer.Swin import (
+            swin_tiny_patch4_window7_224,
+        )
+
         model = swin_tiny_patch4_window7_224(pretrained=True, num_classes=1000)
 
     accuracy1, accuracy5 = check_accuracy(
         model.to(device), test_loader, two_input=False
     )
-    logger.info(f"Initial accuracy before quantization: {accuracy1:5.2f}, accuract5: {accuracy5:5.2f}%")
+    logger.info(
+        f"Initial accuracy before quantization: {accuracy1:5.2f}, accuract5: {accuracy5:5.2f}%"
+    )
 
-    model = model_to_quantize_model(model, num_bits = init_bit)
+    model = model_to_quantize_model(model, num_bits=init_bit)
     oto = OTO(model.cpu(), dummy_input=dummy_input.cpu())
 
     if model_name == "vit":
-        oto.mark_unprunable_by_param_names(
-            ['patch_embed.proj.weight', 'pos_embed']
-        )
+        oto.mark_unprunable_by_param_names(["patch_embed.proj.weight", "pos_embed"])
     elif model_name == "deit":
-        oto.mark_unprunable_by_param_names(
-            ['patch_embed.proj.weight', 'pos_embed']
-        )
+        oto.mark_unprunable_by_param_names(["patch_embed.proj.weight", "pos_embed"])
     elif model_name == "pvt":
         model = None
     elif model_name == "swin":
-        unprunable_list = ['patch_embed.proj.weight','pos_embed']
+        unprunable_list = ["patch_embed.proj.weight", "pos_embed"]
         for name, param in model.named_parameters():
             if "attn.qkv." in name:
                 unprunable_list.append(name)
@@ -372,7 +399,6 @@ def main(config):
         # max_bit_act=max_bit_act,
     )
 
-
     # Get full/original floating-point model MACs, BOPs, and number of parameters
     full_macs = oto.compute_macs(in_million=True, layerwise=True)
     full_bops = oto.compute_bops(in_million=True, layerwise=True)
@@ -401,7 +427,7 @@ def main(config):
         model.train()
         running_loss = 0.0
         for batch_idx, batch in enumerate(
-            tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs}")
+            tqdm(train_loader, desc=f"Epoch {epoch + 1}/{epochs}")
         ):
             inputs, targets = batch
             inputs, targets = inputs.to(device), targets.to(device)
@@ -461,12 +487,16 @@ def main(config):
         logger.info(f"Full MACs for Q{model_name}: {full_macs['total']} M MACs")
         logger.info(f"Full BOPs for Q{model_name}: {full_bops['total']} M BOPs")
         logger.info(f"Full num params for Q{model_name}: {full_num_params} M params")
-        logger.info(f"Full weight size for Q{model_name}: {full_weight_size['total']} MB")
+        logger.info(
+            f"Full weight size for Q{model_name}: {full_weight_size['total']} MB"
+        )
         if "layer_info" in full_macs and "layer_info" in full_bops:
             logger.info("Layer-by-layer breakdown for full model:")
             logger.info(f"{'Layer':<30} {'Type':<15} {'MACs (M)':<15} {'BOPs (M)':<15}")
             logger.info("-" * 75)
-            for mac_info, bop_info in zip(full_macs["layer_info"], full_bops["layer_info"]):
+            for mac_info, bop_info in zip(
+                full_macs["layer_info"], full_bops["layer_info"]
+            ):
                 logger.info(
                     f"{mac_info['name']:<30} {mac_info['type']:<15} {mac_info['macs']:<15.2f} {bop_info['bops']:<15.2f}"
                 )
@@ -477,8 +507,12 @@ def main(config):
         compressed_num_params = oto_compressed.compute_num_params(in_million=True)
         compressed_weight_size = oto_compressed.compute_weight_size(in_million=True)
 
-        logger.info(f"Compressed MACs for Q{model_name}: {compressed_macs['total']} M MACs")
-        logger.info(f"Compressed BOPs for Q{model_name}: {compressed_bops['total']} M BOPs")
+        logger.info(
+            f"Compressed MACs for Q{model_name}: {compressed_macs['total']} M MACs"
+        )
+        logger.info(
+            f"Compressed BOPs for Q{model_name}: {compressed_bops['total']} M BOPs"
+        )
         logger.info(
             f"Compressed num params for Q{model_name}: {compressed_num_params} M params"
         )
@@ -551,9 +585,7 @@ def get_config():
     parser.add_argument(
         "--epochs", type=int, default=100, help="Number of epochs to train"
     )
-    parser.add_argument(
-        "--lr", type=float, default=1e-3, help="Initial learning rate"
-    )
+    parser.add_argument("--lr", type=float, default=1e-3, help="Initial learning rate")
     parser.add_argument(
         "--lr_quant", type=float, default=1e-3, help="Initial learning rate"
     )
@@ -610,8 +642,12 @@ def get_config():
     )
     parser.add_argument("--seed", type=int, default=0, help="Random seed")
     parser.add_argument("--ddp", type=bool, default=False, help="enable ddp")
-    parser.add_argument("--train_dir", type=str, default="", help="Training data directory")
-    parser.add_argument("--test_dir", type=str, default="", help="Testing data directory")
+    parser.add_argument(
+        "--train_dir", type=str, default="", help="Training data directory"
+    )
+    parser.add_argument(
+        "--test_dir", type=str, default="", help="Testing data directory"
+    )
     # Parse arguments
     config = add_common_args(parser).parse_args()
 

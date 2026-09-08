@@ -44,6 +44,7 @@ warnings.filterwarnings("ignore")
 # Set up logging
 logger = logging.getLogger("new")
 
+
 def get_dist_info(args):
     try:
         args.rank = int(os.environ["RANK"])
@@ -56,6 +57,7 @@ def get_dist_info(args):
         args.num_gpus = 1
     return args
 
+
 def prepare_dist_model(model, args):
     model = model.cpu()
     torch.cuda.set_device(args.local_rank)
@@ -63,7 +65,8 @@ def prepare_dist_model(model, args):
     model = model.to(torch.cuda.current_device())
     if args.num_gpus > 1:
         model = torch.nn.parallel.DistributedDataParallel(
-                module=model, broadcast_buffers=False, device_ids=[args.local_rank])
+            module=model, broadcast_buffers=False, device_ids=[args.local_rank]
+        )
     return model
 
 
@@ -158,24 +161,32 @@ def get_data_loader(dataset: str, batch_size: int, num_workers: int, args: None)
         )
     elif dataset == "imagenet":
         input_size = (1, 3, 224, 224)
-        transform_train = transforms.Compose([
-            transforms.RandomResizedCrop(224),
-            transforms.RandomHorizontalFlip(),
-            transforms.ColorJitter(
-                brightness=0.4,
-                contrast=0.4,
-                saturation=0.4,
-                hue=0.2),
-            transforms.ToTensor(),
-            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),])
+        transform_train = transforms.Compose(
+            [
+                transforms.RandomResizedCrop(224),
+                transforms.RandomHorizontalFlip(),
+                transforms.ColorJitter(
+                    brightness=0.4, contrast=0.4, saturation=0.4, hue=0.2
+                ),
+                transforms.ToTensor(),
+                transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+            ]
+        )
 
-        transform_test = transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
-            transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),])
-        train_set = torchvision.datasets.ImageFolder(root=args.train_dir, transform=transform_train)
-        test_set = torchvision.datasets.ImageFolder(root=args.test_dir, transform=transform_test)
+        transform_test = transforms.Compose(
+            [
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
+                transforms.ToTensor(),
+                transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+            ]
+        )
+        train_set = torchvision.datasets.ImageFolder(
+            root=args.train_dir, transform=transform_train
+        )
+        test_set = torchvision.datasets.ImageFolder(
+            root=args.test_dir, transform=transform_test
+        )
 
         if args.ddp:
             train_sampler = DistributedSampler(train_set)
@@ -185,12 +196,22 @@ def get_data_loader(dataset: str, batch_size: int, num_workers: int, args: None)
             val_sampler = None
 
         train_loader = torch.utils.data.DataLoader(
-            train_set, batch_size=batch_size, shuffle=(train_sampler is None),
-            num_workers=8, pin_memory=True, sampler=train_sampler)
+            train_set,
+            batch_size=batch_size,
+            shuffle=(train_sampler is None),
+            num_workers=8,
+            pin_memory=True,
+            sampler=train_sampler,
+        )
 
         test_loader = torch.utils.data.DataLoader(
-            test_set, batch_size=batch_size, shuffle=False,
-            num_workers=8, pin_memory=True, sampler=val_sampler)
+            test_set,
+            batch_size=batch_size,
+            shuffle=False,
+            num_workers=8,
+            pin_memory=True,
+            sampler=val_sampler,
+        )
 
     else:
         raise ValueError("Unsupported dataset")
@@ -267,7 +288,7 @@ def main(config):
     #     level=logging.INFO,
     # )
     # logger = logging.getLogger(__name__)
-    logger = create_exp_dir(config, 'outputs', 'qvit_imagenet')
+    logger = create_exp_dir(config, "outputs", "qvit_imagenet")
     output_dir = os.path.dirname(logger.handlers[0].baseFilename)
 
     # Setup info
@@ -300,22 +321,32 @@ def main(config):
     # dummy_input = torch.rand(input_size)
 
     if model_name == "vit":
-        from sanity_check.backends.vision_transformer.vision_transformer import vit_small_patch16_224
+        from sanity_check.backends.vision_transformer.vision_transformer import (
+            vit_small_patch16_224,
+        )
+
         model = vit_small_patch16_224(pretrained=True, num_classes=1000)
     elif model_name == "deit":
         from sanity_check.backends.vision_transformer.DeiT import deit_tiny_patch16_224
+
         model = deit_tiny_patch16_224(pretrained=True, num_classes=1000)
     elif model_name == "pvt":
         from sanity_check.backends.vision_transformer.PVT import pvt_v2_b0
+
         model = pvt_v2_b0(pretrained=True, num_classes=1000)
     elif model_name == "swin":
-        from sanity_check.backends.vision_transformer.Swin import swin_tiny_patch4_window7_224
+        from sanity_check.backends.vision_transformer.Swin import (
+            swin_tiny_patch4_window7_224,
+        )
+
         model = swin_tiny_patch4_window7_224(pretrained=True, num_classes=1000)
 
     accuracy1, accuracy5 = check_accuracy(
         model.to(device), test_loader, two_input=False
     )
-    logger.info(f"Initial accuracy before quantization: {accuracy1:5.2f}, accuract5: {accuracy5:5.2f}%")
+    logger.info(
+        f"Initial accuracy before quantization: {accuracy1:5.2f}, accuract5: {accuracy5:5.2f}%"
+    )
 
     # model = model_to_quantize_model(model, num_bits = init_bit)
     # oto = OTO(model.cpu(), dummy_input=dummy_input.cpu())
@@ -400,7 +431,7 @@ def main(config):
         model.train()
         running_loss = 0.0
         for batch_idx, batch in enumerate(
-            tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs}")
+            tqdm(train_loader, desc=f"Epoch {epoch + 1}/{epochs}")
         ):
             inputs, targets = batch
             inputs, targets = inputs.to(device), targets.to(device)
@@ -439,7 +470,9 @@ def main(config):
             model.module if config.num_gpus > 1 else model, test_loader, two_input=False
         )
         # avg_wt_bit = oto.compute_average_bit_width()
-        logger.info(f"GPU{config.local_rank}, Epoch: {epoch}, loss: {running_loss_avg:5.3f}, acc1: {accuracy1:5.2f}%, acc5: {accuracy5:5.2f}%")
+        logger.info(
+            f"GPU{config.local_rank}, Epoch: {epoch}, loss: {running_loss_avg:5.3f}, acc1: {accuracy1:5.2f}%, acc5: {accuracy5:5.2f}%"
+        )
 
         # logger.info(
         #     f"GPU{config.local_rank}, Epoch: {epoch}, loss: {running_loss_avg:5.3f}, norm_all: {opt_metrics.norm_params:5.2f}, grp_sparsity: {opt_metrics.group_sparsity:5.2f}, acc1: {accuracy1:5.2f}%, acc5: {accuracy5:5.2f}%, norm_import: {opt_metrics.norm_important_groups:5.2f}, norm_redund: {opt_metrics.norm_redundant_groups:5.2f}, num_grp_import: {opt_metrics.num_important_groups:5.2f}, num_grp_redund: {opt_metrics.num_redundant_groups:5.2f}, avg_wt_bit_width: {avg_wt_bit:5.2f}"
@@ -551,9 +584,7 @@ def get_config():
     parser.add_argument(
         "--epochs", type=int, default=100, help="Number of epochs to train"
     )
-    parser.add_argument(
-        "--lr", type=float, default=1e-3, help="Initial learning rate"
-    )
+    parser.add_argument("--lr", type=float, default=1e-3, help="Initial learning rate")
     parser.add_argument("--weight_decay", type=float, default=1e-4, help="Weight decay")
     parser.add_argument(
         "--lr_step", type=int, default=100, help="LR scheduler step size"
@@ -567,9 +598,12 @@ def get_config():
     )
     parser.add_argument("--seed", type=int, default=0, help="Random seed")
     parser.add_argument("--ddp", type=bool, default=False, help="enable ddp")
-    parser.add_argument("--train_dir", type=str, default="", help="Training data directory")
-    parser.add_argument("--test_dir", type=str, default="", help="Testing data directory")
-
+    parser.add_argument(
+        "--train_dir", type=str, default="", help="Training data directory"
+    )
+    parser.add_argument(
+        "--test_dir", type=str, default="", help="Testing data directory"
+    )
 
     parser.add_argument("--variant", type=str, default="adam", help="Method variant")
     parser.add_argument(

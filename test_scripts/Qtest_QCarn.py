@@ -217,7 +217,7 @@ def train_carn():
     os.makedirs(log_dir, exist_ok=True)
     log_file = os.path.join(
         log_dir,
-        f'logs_{datetime.datetime.now().strftime("%Y%m%d_%H%M%S")}.txt',
+        f"logs_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
     )
 
     scale = 2
@@ -284,7 +284,7 @@ def train_carn():
             optimizer.set_learning_rate(learning_rate)
             f_avg_val += loss.item()
             if step % print_interval == 0:
-                print(f"Step: {step}, loss: {f_avg_val/print_interval:.4f}")
+                print(f"Step: {step}, loss: {f_avg_val / print_interval:.4f}")
                 metrics = optimizer.compute_metrics()
                 print(metrics)
                 f_avg_val = 0.0

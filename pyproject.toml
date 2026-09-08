@@ -25,3 +25,8 @@ build-backend = "uv_build"
 [tool.uv.build-backend]
 module-name = ["tutorials", "test_scripts", "sanity_check", "only_train_once", "utils"]
 module-root = ""
+
+[dependency-groups]
+dev = [
+    "ruff>=0.16.6",
+]
