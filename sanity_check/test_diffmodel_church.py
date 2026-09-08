@@ -4,7 +4,8 @@ from backends import DiffModelChurch
 import unittest
 import os
 
-OUT_DIR = './cache'
+OUT_DIR = "./cache"
+
 
 class TestDiffModelChurch(unittest.TestCase):
     def test_sanity(self, dummy_input=torch.rand(1, 4, 256, 256)):
@@ -15,7 +16,7 @@ class TestDiffModelChurch(unittest.TestCase):
         oto.random_set_zero_groups()
 
         oto.construct_subnet(out_dir=OUT_DIR)
-    
+
         full_model = torch.load(oto.full_group_sparse_model_path)
         compressed_model = torch.load(oto.compressed_model_path)
 
@@ -27,5 +28,9 @@ class TestDiffModelChurch(unittest.TestCase):
         # self.assertLessEqual(max_output_diff, 1e-4)
         full_model_size = os.stat(oto.full_group_sparse_model_path)
         compressed_model_size = os.stat(oto.compressed_model_path)
-        print("Size of full model     : ", full_model_size.st_size / (1024 ** 3), "GBs")
-        print("Size of compress model : ", compressed_model_size.st_size / (1024 ** 3), "GBs")
+        print("Size of full model     : ", full_model_size.st_size / (1024**3), "GBs")
+        print(
+            "Size of compress model : ",
+            compressed_model_size.st_size / (1024**3),
+            "GBs",
+        )

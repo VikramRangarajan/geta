@@ -1,5 +1,6 @@
 import unittest
 import os
+
 """
 Quantization test cases
 """
@@ -17,9 +18,9 @@ from sanity_check.test_qphi2 import TestQPhi2
 from sanity_check.test_qvit import TestQViT
 from sanity_check.test_qdeit import TestQDeiT
 
-OUT_DIR = './cache'
+OUT_DIR = "./cache"
 
 os.makedirs(OUT_DIR, exist_ok=True)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

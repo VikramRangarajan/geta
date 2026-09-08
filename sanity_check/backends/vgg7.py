@@ -15,6 +15,7 @@ import torch
 from torch import nn
 import torch.nn.init as init  # for weight initialization.
 
+
 def _weights_init(m):
     if isinstance(m, nn.Linear):
         init.kaiming_normal_(m.weight)
@@ -25,20 +26,39 @@ def _weights_init(m):
         nn.init.constant_(m.weight, 1)
         nn.init.constant_(m.bias, 0)
 
+
 def _make_layers(vgg_cfg, batch_norm: bool = False):
     layers = nn.Sequential()
     in_channels = 3
     for v in vgg_cfg:
         if v == "M":
-            layers.append(nn.MaxPool2d(kernel_size=(2, 2), stride=(2, 2)))  # kernel size, stride
+            layers.append(
+                nn.MaxPool2d(kernel_size=(2, 2), stride=(2, 2))
+            )  # kernel size, stride
         else:
             v = cast(int, v)
             if batch_norm:
-                layers.append(nn.Conv2d(in_channels, v, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1)))
+                layers.append(
+                    nn.Conv2d(
+                        in_channels,
+                        v,
+                        kernel_size=(3, 3),
+                        stride=(1, 1),
+                        padding=(1, 1),
+                    )
+                )
                 layers.append(nn.BatchNorm2d(v))  # v represents num_feature
                 layers.append(nn.ReLU(inplace=True))  # inplace operation
             else:
-                layers.append(nn.Conv2d(in_channels, v, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1)))
+                layers.append(
+                    nn.Conv2d(
+                        in_channels,
+                        v,
+                        kernel_size=(3, 3),
+                        stride=(1, 1),
+                        padding=(1, 1),
+                    )
+                )
                 layers.append(nn.ReLU(inplace=True))  # inplace operation
             in_channels = v
 
@@ -73,5 +93,10 @@ class VGG7_BN(nn.Module):
         out = self.classifier(out)
         return out
 
+
 def vgg7_bn(cfg=None, num_classes=None):
-    return VGG7_BN(vgg_cfg=[128, 128, "M", 256, 256, "M", 512, 512, "M"], num_classes=num_classes or 10, batch_norm=True)
+    return VGG7_BN(
+        vgg_cfg=[128, 128, "M", 256, 256, "M", 512, 512, "M"],
+        num_classes=num_classes or 10,
+        batch_norm=True,
+    )

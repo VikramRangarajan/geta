@@ -138,8 +138,8 @@ class RotaryEmbedding(torch.nn.Module):
         cos_x = cos[:, pos : pos + seq_len, :, :]
         sin_x = sin[:, pos : pos + seq_len, :, :]
 
-        real = cos_x[..., :x1.shape[-1]] * x1 - sin_x[..., :x2.shape[-1]] * x2
-        imag = sin_x[..., :x1.shape[-1]] * x1 + cos_x[..., :x2.shape[-1]] * x2
+        real = cos_x[..., : x1.shape[-1]] * x1 - sin_x[..., : x2.shape[-1]] * x2
+        imag = sin_x[..., : x1.shape[-1]] * x1 + cos_x[..., : x2.shape[-1]] * x2
 
         if interleaved:
             x_rot[:, :, :, 0::2] = real
@@ -202,7 +202,7 @@ class SelfAttention(nn.Module):
             raise ValueError(f"Unknown scale type {scale_type}")
 
         self.interleaved = interleaved
-        
+
     def forward(
         self,
         x: torch.Tensor,

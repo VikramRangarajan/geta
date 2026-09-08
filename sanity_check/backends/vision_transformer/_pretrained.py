@@ -4,34 +4,42 @@ from dataclasses import dataclass, field, replace, asdict
 from typing import Any, Deque, Dict, Tuple, Optional, Union
 
 
-__all__ = ['PretrainedCfg', 'filter_pretrained_cfg', 'DefaultCfg']
+__all__ = ["PretrainedCfg", "filter_pretrained_cfg", "DefaultCfg"]
 
 
 @dataclass
 class PretrainedCfg:
-    """
-    """
+    """ """
+
     # weight source locations
     url: Optional[Union[str, Tuple[str, str]]] = None  # remote URL
     file: Optional[str] = None  # local / shared filesystem path
     state_dict: Optional[Dict[str, Any]] = None  # in-memory state dict
     hf_hub_id: Optional[str] = None  # Hugging Face Hub model id ('organization/model')
-    hf_hub_filename: Optional[str] = None  # Hugging Face Hub filename (overrides default)
+    hf_hub_filename: Optional[str] = (
+        None  # Hugging Face Hub filename (overrides default)
+    )
 
-    source: Optional[str] = None  # source of cfg / weight location used (url, file, hf-hub)
-    architecture: Optional[str] = None  # architecture variant can be set when not implicit
+    source: Optional[str] = (
+        None  # source of cfg / weight location used (url, file, hf-hub)
+    )
+    architecture: Optional[str] = (
+        None  # architecture variant can be set when not implicit
+    )
     tag: Optional[str] = None  # pretrained tag of source
-    custom_load: bool = False  # use custom model specific model.load_pretrained() (ie for npz files)
+    custom_load: bool = (
+        False  # use custom model specific model.load_pretrained() (ie for npz files)
+    )
 
     # input / data config
     input_size: Tuple[int, int, int] = (3, 224, 224)
     test_input_size: Optional[Tuple[int, int, int]] = None
     min_input_size: Optional[Tuple[int, int, int]] = None
     fixed_input_size: bool = False
-    interpolation: str = 'bicubic'
+    interpolation: str = "bicubic"
     crop_pct: float = 0.875
     test_crop_pct: Optional[float] = None
-    crop_mode: str = 'center'
+    crop_mode: str = "center"
     mean: Tuple[float, ...] = (0.485, 0.456, 0.406)
     std: Tuple[float, ...] = (0.229, 0.224, 0.225)
 
@@ -60,17 +68,26 @@ class PretrainedCfg:
 
     def to_dict(self, remove_source=False, remove_null=True):
         return filter_pretrained_cfg(
-            asdict(self),
-            remove_source=remove_source,
-            remove_null=remove_null
+            asdict(self), remove_source=remove_source, remove_null=remove_null
         )
 
 
 def filter_pretrained_cfg(cfg, remove_source=False, remove_null=True):
     filtered_cfg = {}
-    keep_null = {'pool_size', 'first_conv', 'classifier'}  # always keep these keys, even if none
+    keep_null = {
+        "pool_size",
+        "first_conv",
+        "classifier",
+    }  # always keep these keys, even if none
     for k, v in cfg.items():
-        if remove_source and k in {'url', 'file', 'hf_hub_id', 'hf_hub_id', 'hf_hub_filename', 'source'}:
+        if remove_source and k in {
+            "url",
+            "file",
+            "hf_hub_id",
+            "hf_hub_id",
+            "hf_hub_filename",
+            "source",
+        }:
             continue
         if remove_null and v is None and k not in keep_null:
             continue
@@ -80,9 +97,15 @@ def filter_pretrained_cfg(cfg, remove_source=False, remove_null=True):
 
 @dataclass
 class DefaultCfg:
-    tags: Deque[str] = field(default_factory=deque)  # priority queue of tags (first is default)
-    cfgs: Dict[str, PretrainedCfg] = field(default_factory=dict)  # pretrained cfgs by tag
-    is_pretrained: bool = False  # at least one of the configs has a pretrained source set
+    tags: Deque[str] = field(
+        default_factory=deque
+    )  # priority queue of tags (first is default)
+    cfgs: Dict[str, PretrainedCfg] = field(
+        default_factory=dict
+    )  # pretrained cfgs by tag
+    is_pretrained: bool = (
+        False  # at least one of the configs has a pretrained source set
+    )
 
     @property
     def default(self):

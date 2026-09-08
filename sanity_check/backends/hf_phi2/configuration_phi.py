@@ -39,9 +39,11 @@ class PhiConfig(PretrainedConfig):
         initializer_range: float = 0.02,
         tie_word_embeddings: bool = False,
         pad_vocab_size_multiple: int = 64,
-        **kwargs
+        **kwargs,
     ) -> None:
-        self.vocab_size = int(math.ceil(vocab_size / pad_vocab_size_multiple) * pad_vocab_size_multiple)
+        self.vocab_size = int(
+            math.ceil(vocab_size / pad_vocab_size_multiple) * pad_vocab_size_multiple
+        )
         self.n_positions = n_positions
         self.n_embd = n_embd
         self.n_layer = n_layer

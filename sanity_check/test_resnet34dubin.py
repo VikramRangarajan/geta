@@ -4,7 +4,8 @@ from backends import ResNet34_DuBIN
 import unittest
 import os
 
-OUT_DIR = './cache'
+OUT_DIR = "./cache"
+
 
 class TestResNet34DuBIN(unittest.TestCase):
     def test_sanity(self, dummy_input=torch.rand(1, 3, 32, 32)):
@@ -24,7 +25,9 @@ class TestResNet34DuBIN(unittest.TestCase):
         self.assertLessEqual(max_output_diff, 1e-4)
         full_model_size = os.stat(oto.full_group_sparse_model_path)
         compressed_model_size = os.stat(oto.compressed_model_path)
-        print("Size of full model     : ", full_model_size.st_size / (1024 ** 3), "GBs")
-        print("Size of compress model : ", compressed_model_size.st_size / (1024 ** 3), "GBs")
-
-        
+        print("Size of full model     : ", full_model_size.st_size / (1024**3), "GBs")
+        print(
+            "Size of compress model : ",
+            compressed_model_size.st_size / (1024**3),
+            "GBs",
+        )
