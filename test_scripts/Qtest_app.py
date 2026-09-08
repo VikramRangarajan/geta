@@ -20,12 +20,12 @@ from sanity_check.backends.resnet20_cifar10 import resnet20_cifar10
 from sanity_check.backends.resnet_cifar10 import resnet18_cifar10
 from sanity_check.backends.vgg7 import vgg7_bn
 
-from .geta_common import (
+from test_scripts.geta_common import (
     StreamingDataset,
-    check_accuracy,
     resolve_data_dir,
     resolve_output_dir,
 )
+from utils.utils import check_accuracy
 
 # Set up logging
 logging.basicConfig(

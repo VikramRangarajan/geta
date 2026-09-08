@@ -20,12 +20,12 @@ from torchvision import transforms
 from torchvision.datasets import CIFAR10
 from tqdm import tqdm
 
-from .geta_common import (
+from test_scripts.geta_common import (
     add_common_args,
-    check_accuracy,
     create_exp_dir,
     resolve_data_dir,
 )
+from utils.utils import check_accuracy
 
 # Ignore warnings
 warnings.filterwarnings("ignore")

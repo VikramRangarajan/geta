@@ -33,9 +33,9 @@ from only_train_once.quantization.quant_model import model_to_quantize_model
 from sanity_check.backends.resnet20_cifar10 import resnet56_cifar10
 from sanity_check.backends.vgg7 import vgg7_bn
 
-from .geta_common import (
+from utils.utils import check_accuracy
+from test_scripts.geta_common import (
     add_common_args,
-    check_accuracy,
     resolve_data_dir,
     resolve_output_dir,
 )

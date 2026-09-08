@@ -9,15 +9,12 @@ import math
 import os
 import warnings
 
-from .geta_common import (
+from test_scripts.geta_common import (
     add_common_args,
-    bootstrap_paths,
-    check_accuracy,
     create_exp_dir,
     resolve_data_dir,
 )
-
-bootstrap_paths()
+from utils.utils import check_accuracy
 
 import numpy as np
 import torch

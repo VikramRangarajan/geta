@@ -30,9 +30,9 @@ from only_train_once.optimizer.utils import (
 from only_train_once.quantization.quant_model import model_to_quantize_model
 from sanity_check.backends.simple_vit import simpleViT_cifar10
 
-from .geta_common import (
+from utils.utils import check_accuracy
+from test_scripts.geta_common import (
     add_common_args,
-    check_accuracy,
     resolve_data_dir,
     resolve_output_dir,
 )
