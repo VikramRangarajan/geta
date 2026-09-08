@@ -3,7 +3,7 @@ from ..operation.operator import (
     UNPRUNABLE_BASIC_OPERATORS,
     UNPRUNABLE_COMPOSED_OPERATORS,
 )
-from ..transform import is_spread_transformation, TensorTransform, SPREAD_TRANSFORM_MAP
+from ..transform import SPREAD_TRANSFORM_MAP, TensorTransform, is_spread_transformation
 
 
 def get_non_stem_nodes(graph, skip_node_ids=set()):

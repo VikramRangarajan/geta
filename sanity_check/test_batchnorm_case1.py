@@ -1,9 +1,11 @@
-import torch
-from only_train_once import OTO
-from backends import DemonetBatchnormPruning
-import unittest
 import os
-import torch.nn as nn
+import unittest
+
+import torch
+from backends import DemonetBatchnormPruning
+from torch import nn
+
+from only_train_once import OTO
 
 OUT_DIR = "./cache"
 

@@ -51,7 +51,7 @@ class Node:
             if np.unique(stride).size == 1:
                 stride = stride[0]
             if stride != 1:
-                title += "/s{}".format(str(stride))
+                title += f"/s{stride!s}"
         return title
 
     def is_stem(self):

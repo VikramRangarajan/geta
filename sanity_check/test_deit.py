@@ -3,13 +3,14 @@ Model description on Huggingface
 https://huggingface.co/timm/deit_tiny_patch16_224.fb_in1k
 """
 
-import torch
-import torch.nn as nn
-from only_train_once import OTO
-import unittest
 import os
-from transformers import ViTConfig
+import unittest
+
+import torch
 from backends.vision_transformer.DeiT import deit_tiny_patch16_224
+from torch import nn
+
+from only_train_once import OTO
 
 OUT_DIR = "./cache"
 

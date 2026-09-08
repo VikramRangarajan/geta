@@ -12,9 +12,9 @@ Reference:
 """
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-import torch.nn.init as init  # for weight initialization.
+from torch import nn
+from torch.nn import init  # for weight initialization.
 
 
 def _weights_init(m):
@@ -29,7 +29,7 @@ class BasicBlock(nn.Module):
     expansion = 1
 
     def __init__(self, in_channels, out_channels, stride=1):
-        super(BasicBlock, self).__init__()
+        super().__init__()
         self.conv1 = nn.Conv2d(
             in_channels,
             out_channels,
@@ -67,7 +67,7 @@ class BasicBlock(nn.Module):
 
 class ResNet20(nn.Module):
     def __init__(self, block, num_blocks, num_classes=10):
-        super(ResNet20, self).__init__()
+        super().__init__()
         self.in_channels = 16
 
         self.conv1 = nn.Conv2d(3, 16, kernel_size=3, stride=1, padding=1, bias=False)

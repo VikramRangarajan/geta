@@ -1,7 +1,7 @@
-import torch.nn as nn
+from torch import nn
 
 
-class EMAHelper(object):
+class EMAHelper:
     def __init__(self, mu=0.999):
         self.mu = mu
         self.shadow = {}

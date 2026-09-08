@@ -1,10 +1,10 @@
+import unittest
+
 import torch
+from backends.resnet_cifar10 import resnet18_cifar10
+
 from only_train_once import OTO
 from only_train_once.quantization.quant_model import model_to_quantize_model
-from backends.resnet_cifar10 import resnet18_cifar10
-import torchvision.models
-import unittest
-import os
 
 OUT_DIR = "./cache"
 

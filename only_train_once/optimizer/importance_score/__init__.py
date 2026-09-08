@@ -1,7 +1,8 @@
-from .magnitude import *
-from .cosine_similarity import *
-from .taylor import *
 import torch
+
+from .cosine_similarity import *
+from .magnitude import *
+from .taylor import *
 
 
 def calculate_importance_score(criteria, param_group):

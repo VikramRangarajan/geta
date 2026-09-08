@@ -1,10 +1,9 @@
 import math
 from dataclasses import dataclass
-from typing import Union
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
 
 from .pscan import pscan
 
@@ -29,7 +28,7 @@ See Figure 3 of the paper (page 8) for a visual representation of a MambaBlock.
 class MambaConfig:
     d_model: int  # D
     n_layers: int
-    dt_rank: Union[int, str] = "auto"
+    dt_rank: int | str = "auto"
     d_state: int = 16  # N in paper/comments
     expand_factor: int = 2  # E in paper/comments
     d_conv: int = 4
@@ -344,7 +343,7 @@ class MambaBlock(nn.Module):
         )  # (B, ED, N)
         hs = []
 
-        for t in range(0, L):
+        for t in range(L):
             h = deltaA[:, t] * h + BX[:, t]
             hs.append(h)
 

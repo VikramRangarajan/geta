@@ -1,10 +1,10 @@
-import torch.nn as nn
 import torch
+from torch import nn
 
 
 class DemoNetWeightShareCase2(nn.Module):
     def __init__(self):
-        super(DemoNetWeightShareCase2, self).__init__()
+        super().__init__()
         self.conv1 = nn.Conv2d(
             3, 832, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1)
         )

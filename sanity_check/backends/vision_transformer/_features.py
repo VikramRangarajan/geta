@@ -10,32 +10,33 @@ Hacked together by / Copyright 2020 Ross Wightman
 """
 
 from collections import OrderedDict, defaultdict
+from collections.abc import Sequence
 from copy import deepcopy
 from functools import partial
-from typing import Dict, List, Optional, Sequence, Tuple, Union
+from typing import Union
 
 import torch
-import torch.nn as nn
-
 from timm.layers import Format, _assert
+from torch import nn
+
 from ._manipulate import checkpoint
 
 __all__ = [
-    "FeatureInfo",
-    "FeatureHooks",
     "FeatureDictNet",
-    "FeatureListNet",
-    "FeatureHookNet",
     "FeatureGetterNet",
+    "FeatureHookNet",
+    "FeatureHooks",
+    "FeatureInfo",
+    "FeatureListNet",
     "feature_take_indices",
 ]
 
 
 def feature_take_indices(
     num_features: int,
-    indices: Optional[Union[int, List[int]]] = None,
+    indices: int | list[int] | None = None,
     as_set: bool = False,
-) -> Tuple[List[int], int]:
+) -> tuple[list[int], int]:
     """Determine the absolute feature indices to 'take' from.
 
     Note: This function can be called in forward() so must be torchscript compatible,
@@ -63,7 +64,7 @@ def feature_take_indices(
         )
         take_indices = [num_features - indices + i for i in range(indices)]
     else:
-        take_indices: List[int] = []
+        take_indices: list[int] = []
         for i in indices:
             idx = num_features + i if i < 0 else i
             _assert(
@@ -78,20 +79,20 @@ def feature_take_indices(
     return take_indices, max(take_indices)
 
 
-def _out_indices_as_tuple(x: Union[int, Tuple[int, ...]]) -> Tuple[int, ...]:
+def _out_indices_as_tuple(x: int | tuple[int, ...]) -> tuple[int, ...]:
     if isinstance(x, int):
         # if indices is an int, take last N features
         return tuple(range(-x, 0))
     return tuple(x)
 
 
-OutIndicesT = Union[int, Tuple[int, ...]]
+OutIndicesT = Union[int, tuple[int, ...]]
 
 
 class FeatureInfo:
     def __init__(
         self,
-        feature_info: List[Dict],
+        feature_info: list[dict],
         out_indices: OutIndicesT,
     ):
         out_indices = _out_indices_as_tuple(out_indices)
@@ -110,7 +111,7 @@ class FeatureInfo:
         out_indices = _out_indices_as_tuple(out_indices)
         return FeatureInfo(deepcopy(self.info), out_indices)
 
-    def get(self, key: str, idx: Optional[Union[int, List[int]]] = None):
+    def get(self, key: str, idx: int | list[int] | None = None):
         """Get value by key at specified index (indices)
         if idx == None, returns value for key at each output index
         if idx is an integer, return value for that feature module index (ignoring output indices)
@@ -125,8 +126,8 @@ class FeatureInfo:
 
     def get_dicts(
         self,
-        keys: Optional[List[str]] = None,
-        idx: Optional[Union[int, List[int]]] = None,
+        keys: list[str] | None = None,
+        idx: int | list[int] | None = None,
     ):
         """return info dicts for specified keys (or all if None) at specified indices (or out_indices if None)"""
         if idx is None:
@@ -144,15 +145,15 @@ class FeatureInfo:
                 self.info[idx] if keys is None else {k: self.info[idx][k] for k in keys}
             )
 
-    def channels(self, idx: Optional[Union[int, List[int]]] = None):
+    def channels(self, idx: int | list[int] | None = None):
         """feature channels accessor"""
         return self.get("num_chs", idx)
 
-    def reduction(self, idx: Optional[Union[int, List[int]]] = None):
+    def reduction(self, idx: int | list[int] | None = None):
         """feature reduction (output stride) accessor"""
         return self.get("reduction", idx)
 
-    def module_name(self, idx: Optional[Union[int, List[int]]] = None):
+    def module_name(self, idx: int | list[int] | None = None):
         """feature module name accessor"""
         return self.get("module", idx)
 
@@ -174,9 +175,9 @@ class FeatureHooks:
 
     def __init__(
         self,
-        hooks: Sequence[Union[str, Dict]],
+        hooks: Sequence[str | dict],
         named_modules: dict,
-        out_map: Sequence[Union[int, str]] = None,
+        out_map: Sequence[int | str] = None,
         default_hook_type: str = "forward",
     ):
         # setup feature hooks
@@ -207,7 +208,7 @@ class FeatureHooks:
             x = x[0]  # unwrap input tuple
         self._feature_outputs[x.device][hook_id] = x
 
-    def get_output(self, device) -> Dict[str, torch.tensor]:
+    def get_output(self, device) -> dict[str, torch.tensor]:
         output = self._feature_outputs[device]
         self._feature_outputs[device] = OrderedDict()  # clear after reading
         return output
@@ -228,7 +229,7 @@ def _module_list(module, flatten_sequential=False):
 
 
 def _get_feature_info(net, out_indices: OutIndicesT):
-    feature_info = getattr(net, "feature_info")
+    feature_info = net.feature_info
     if isinstance(feature_info, FeatureInfo):
         return feature_info.from_other(out_indices)
     elif isinstance(feature_info, (list, tuple)):
@@ -267,7 +268,7 @@ class FeatureDictNet(nn.ModuleDict):
         self,
         model: nn.Module,
         out_indices: OutIndicesT = (0, 1, 2, 3, 4),
-        out_map: Sequence[Union[int, str]] = None,
+        out_map: Sequence[int | str] = None,
         output_fmt: str = "NCHW",
         feature_concat: bool = False,
         flatten_sequential: bool = False,
@@ -281,7 +282,7 @@ class FeatureDictNet(nn.ModuleDict):
                 first element e.g. `x[0]`
             flatten_sequential: Flatten first two-levels of sequential modules in model (re-writes model modules)
         """
-        super(FeatureDictNet, self).__init__()
+        super().__init__()
         self.feature_info = _get_feature_info(model, out_indices)
         self.output_fmt = Format(output_fmt)
         self.concat = feature_concat
@@ -308,7 +309,7 @@ class FeatureDictNet(nn.ModuleDict):
     def set_grad_checkpointing(self, enable: bool = True):
         self.grad_checkpointing = enable
 
-    def _collect(self, x) -> Dict[str, torch.Tensor]:
+    def _collect(self, x) -> dict[str, torch.Tensor]:
         out = OrderedDict()
         for i, (name, module) in enumerate(self.items()):
             if self.grad_checkpointing and not torch.jit.is_scripting():
@@ -330,7 +331,7 @@ class FeatureDictNet(nn.ModuleDict):
                     out[out_id] = x
         return out
 
-    def forward(self, x) -> Dict[str, torch.Tensor]:
+    def forward(self, x) -> dict[str, torch.Tensor]:
         return self._collect(x)
 
 
@@ -364,7 +365,7 @@ class FeatureListNet(FeatureDictNet):
             flatten_sequential=flatten_sequential,
         )
 
-    def forward(self, x) -> List[torch.Tensor]:
+    def forward(self, x) -> list[torch.Tensor]:
         return list(self._collect(x).values())
 
 
@@ -386,10 +387,10 @@ class FeatureHookNet(nn.ModuleDict):
         self,
         model: nn.Module,
         out_indices: OutIndicesT = (0, 1, 2, 3, 4),
-        out_map: Optional[Sequence[Union[int, str]]] = None,
+        out_map: Sequence[int | str] | None = None,
         return_dict: bool = False,
         output_fmt: str = "NCHW",
-        no_rewrite: Optional[bool] = None,
+        no_rewrite: bool | None = None,
         flatten_sequential: bool = False,
         default_hook_type: str = "forward",
     ):
@@ -469,7 +470,7 @@ class FeatureGetterNet(nn.ModuleDict):
         self,
         model: nn.Module,
         out_indices: OutIndicesT = 4,
-        out_map: Optional[Sequence[Union[int, str]]] = None,
+        out_map: Sequence[int | str] | None = None,
         return_dict: bool = False,
         output_fmt: str = "NCHW",
         norm: bool = False,

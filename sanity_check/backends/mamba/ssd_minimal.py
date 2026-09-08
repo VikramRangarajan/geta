@@ -7,7 +7,6 @@ This is the same as Listing 1 from the paper.
 import torch
 import torch.nn.functional as F
 from einops import rearrange, repeat
-
 from mamba_ssm.ops.triton.ssd_combined import mamba_chunk_scan_combined
 
 
@@ -60,7 +59,7 @@ def ssd_minimal_discrete(X, A, B, C, block_len, initial_states=None):
 
     # 2. Compute the state for each intra-chunk
     # (right term of low-rank factorization of off-diagonal blocks; B terms)
-    decay_states = torch.exp((A_cumsum[:, :, :, -1:] - A_cumsum))
+    decay_states = torch.exp(A_cumsum[:, :, :, -1:] - A_cumsum)
     states = torch.einsum("bclhn,bhcl,bclhp->bchpn", B, decay_states, X)
 
     # 3. Compute the inter-chunk SSM recurrence; produces correct SSM states at chunk boundaries

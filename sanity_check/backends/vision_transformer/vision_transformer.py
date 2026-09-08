@@ -28,19 +28,17 @@ import copy
 import logging
 import math
 from collections import OrderedDict
+from collections.abc import Callable
 from functools import partial
-from typing import Any, Callable, Dict, Optional, Set, Tuple, Type, Union, List
+from typing import Any
 
 try:
     from typing import Literal
 except ImportError:
-    from typing_extensions import Literal
+    from typing import Literal
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-from torch.jit import Final
-
 from timm.data import (
     IMAGENET_DEFAULT_MEAN,
     IMAGENET_DEFAULT_STD,
@@ -50,26 +48,29 @@ from timm.data import (
     OPENAI_CLIP_STD,
 )
 from timm.layers import (
-    PatchEmbed,
-    Mlp,
-    DropPath,
     AttentionPoolLatent,
-    RmsNorm,
+    DropPath,
+    LayerType,
+    Mlp,
     PatchDropout,
-    SwiGLUPacked,
+    PatchEmbed,
+    RmsNorm,
     SwiGLU,
-    trunc_normal_,
-    lecun_normal_,
-    resample_patch_embed,
-    resample_abs_pos_embed,
-    use_fused_attn,
+    SwiGLUPacked,
     get_act_layer,
     get_norm_layer,
-    LayerType,
+    lecun_normal_,
+    resample_abs_pos_embed,
+    resample_patch_embed,
+    trunc_normal_,
+    use_fused_attn,
 )
+from torch import nn
+from torch.jit import Final
+
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
-from ._manipulate import named_apply, checkpoint_seq, adapt_input_conv
+from ._manipulate import adapt_input_conv, checkpoint_seq, named_apply
 from ._registry import (
     generate_default_cfgs,
     register_model,
@@ -94,7 +95,7 @@ class ViTAttention(nn.Module):
         proj_bias: bool = True,
         attn_drop: float = 0.0,
         proj_drop: float = 0.0,
-        norm_layer: Type[nn.Module] = nn.LayerNorm,
+        norm_layer: type[nn.Module] = nn.LayerNorm,
     ) -> None:
         super().__init__()
         assert dim % num_heads == 0, "dim should be divisible by num_heads"
@@ -167,11 +168,11 @@ class Block(nn.Module):
         proj_bias: bool = True,
         proj_drop: float = 0.0,
         attn_drop: float = 0.0,
-        init_values: Optional[float] = None,
+        init_values: float | None = None,
         drop_path: float = 0.0,
-        act_layer: Type[nn.Module] = nn.GELU,
-        norm_layer: Type[nn.Module] = nn.LayerNorm,
-        mlp_layer: Type[nn.Module] = Mlp,
+        act_layer: type[nn.Module] = nn.GELU,
+        norm_layer: type[nn.Module] = nn.LayerNorm,
+        mlp_layer: type[nn.Module] = Mlp,
     ) -> None:
         super().__init__()
         self.norm1 = norm_layer(dim)
@@ -221,11 +222,11 @@ class ResPostBlock(nn.Module):
         proj_bias: bool = True,
         proj_drop: float = 0.0,
         attn_drop: float = 0.0,
-        init_values: Optional[float] = None,
+        init_values: float | None = None,
         drop_path: float = 0.0,
-        act_layer: Type[nn.Module] = nn.GELU,
-        norm_layer: Type[nn.Module] = nn.LayerNorm,
-        mlp_layer: Type[nn.Module] = Mlp,
+        act_layer: type[nn.Module] = nn.GELU,
+        norm_layer: type[nn.Module] = nn.LayerNorm,
+        mlp_layer: type[nn.Module] = Mlp,
     ) -> None:
         super().__init__()
         self.init_values = init_values
@@ -286,11 +287,11 @@ class ParallelScalingBlock(nn.Module):
         proj_bias: bool = True,
         proj_drop: float = 0.0,
         attn_drop: float = 0.0,
-        init_values: Optional[float] = None,
+        init_values: float | None = None,
         drop_path: float = 0.0,
-        act_layer: Type[nn.Module] = nn.GELU,
-        norm_layer: Type[nn.Module] = nn.LayerNorm,
-        mlp_layer: Optional[Type[nn.Module]] = None,
+        act_layer: type[nn.Module] = nn.GELU,
+        norm_layer: type[nn.Module] = nn.LayerNorm,
+        mlp_layer: type[nn.Module] | None = None,
     ) -> None:
         super().__init__()
         assert dim % num_heads == 0, "dim should be divisible by num_heads"
@@ -388,13 +389,13 @@ class ParallelThingsBlock(nn.Module):
         qkv_bias: bool = False,
         qk_norm: bool = False,
         proj_bias: bool = True,
-        init_values: Optional[float] = None,
+        init_values: float | None = None,
         proj_drop: float = 0.0,
         attn_drop: float = 0.0,
         drop_path: float = 0.0,
-        act_layer: Type[nn.Module] = nn.GELU,
-        norm_layer: Type[nn.Module] = nn.LayerNorm,
-        mlp_layer: Type[nn.Module] = Mlp,
+        act_layer: type[nn.Module] = nn.GELU,
+        norm_layer: type[nn.Module] = nn.LayerNorm,
+        mlp_layer: type[nn.Module] = Mlp,
     ) -> None:
         super().__init__()
         self.num_parallel = num_parallel
@@ -522,8 +523,8 @@ class VisionTransformer(nn.Module):
 
     def __init__(
         self,
-        img_size: Union[int, Tuple[int, int]] = 224,
-        patch_size: Union[int, Tuple[int, int]] = 16,
+        img_size: int | tuple[int, int] = 224,
+        patch_size: int | tuple[int, int] = 16,
         in_chans: int = 3,
         num_classes: int = 1000,
         global_pool: Literal["", "avg", "avgmax", "max", "token", "map"] = "token",
@@ -534,14 +535,14 @@ class VisionTransformer(nn.Module):
         qkv_bias: bool = True,
         qk_norm: bool = False,
         proj_bias: bool = True,
-        init_values: Optional[float] = None,
+        init_values: float | None = None,
         class_token: bool = True,
         pos_embed: str = "learn",
         no_embed_class: bool = False,
         reg_tokens: int = 0,
         pre_norm: bool = False,
         final_norm: bool = True,
-        fc_norm: Optional[bool] = None,
+        fc_norm: bool | None = None,
         dynamic_img_size: bool = False,
         dynamic_img_pad: bool = False,
         drop_rate: float = 0.0,
@@ -553,11 +554,11 @@ class VisionTransformer(nn.Module):
         weight_init: Literal["skip", "jax", "jax_nlhb", "moco", ""] = "",
         fix_init: bool = False,
         embed_layer: Callable = PatchEmbed,
-        embed_norm_layer: Optional[LayerType] = None,
-        norm_layer: Optional[LayerType] = None,
-        act_layer: Optional[LayerType] = None,
-        block_fn: Type[nn.Module] = Block,
-        mlp_layer: Type[nn.Module] = Mlp,
+        embed_norm_layer: LayerType | None = None,
+        norm_layer: LayerType | None = None,
+        act_layer: LayerType | None = None,
+        block_fn: type[nn.Module] = Block,
+        mlp_layer: type[nn.Module] = Mlp,
     ) -> None:
         """
         Args:
@@ -743,11 +744,11 @@ class VisionTransformer(nn.Module):
         _load_weights(self, checkpoint_path, prefix)
 
     @torch.jit.ignore
-    def no_weight_decay(self) -> Set:
+    def no_weight_decay(self) -> set:
         return {"pos_embed", "cls_token", "dist_token"}
 
     @torch.jit.ignore
-    def group_matcher(self, coarse: bool = False) -> Dict:
+    def group_matcher(self, coarse: bool = False) -> dict:
         return dict(
             stem=r"^cls_token|pos_embed|patch_embed",  # stem and embed
             blocks=[(r"^blocks\.(\d+)", None), (r"^norm", (99999,))],
@@ -763,7 +764,7 @@ class VisionTransformer(nn.Module):
     def get_classifier(self) -> nn.Module:
         return self.head
 
-    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+    def reset_classifier(self, num_classes: int, global_pool: str | None = None):
         self.num_classes = num_classes
         if global_pool is not None:
             assert global_pool in ("", "avg", "avgmax", "max", "token", "map")
@@ -780,8 +781,8 @@ class VisionTransformer(nn.Module):
 
     def set_input_size(
         self,
-        img_size: Optional[Tuple[int, int]] = None,
-        patch_size: Optional[Tuple[int, int]] = None,
+        img_size: tuple[int, int] | None = None,
+        patch_size: tuple[int, int] | None = None,
     ):
         """Method updates the input image resolution, patch size
 
@@ -846,13 +847,13 @@ class VisionTransformer(nn.Module):
     def forward_intermediates(
         self,
         x: torch.Tensor,
-        indices: Optional[Union[int, List[int]]] = None,
+        indices: int | list[int] | None = None,
         return_prefix_tokens: bool = False,
         norm: bool = False,
         stop_early: bool = False,
         output_fmt: str = "NCHW",
         intermediates_only: bool = False,
-    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+    ) -> list[torch.Tensor] | tuple[torch.Tensor, list[torch.Tensor]]:
         """Forward features that returns intermediates.
 
         Args:
@@ -917,7 +918,7 @@ class VisionTransformer(nn.Module):
 
     def prune_intermediate_layers(
         self,
-        indices: Union[int, List[int]] = 1,
+        indices: int | list[int] = 1,
         prune_norm: bool = False,
         prune_head: bool = True,
     ):
@@ -934,11 +935,11 @@ class VisionTransformer(nn.Module):
     def get_intermediate_layers(
         self,
         x: torch.Tensor,
-        n: Union[int, List[int], Tuple[int]] = 1,
+        n: int | list[int] | tuple[int] = 1,
         reshape: bool = False,
         return_prefix_tokens: bool = False,
         norm: bool = False,
-    ) -> List[torch.Tensor]:
+    ) -> list[torch.Tensor]:
         """Intermediate layer accessor inspired by DINO / DINOv2 interface.
         NOTE: This API is for backwards compat, favour using forward_intermediates() directly.
         """
@@ -963,7 +964,7 @@ class VisionTransformer(nn.Module):
         x = self.norm(x)
         return x
 
-    def pool(self, x: torch.Tensor, pool_type: Optional[str] = None) -> torch.Tensor:
+    def pool(self, x: torch.Tensor, pool_type: str | None = None) -> torch.Tensor:
         if self.attn_pool is not None:
             x = self.attn_pool(x)
             return x
@@ -1047,7 +1048,7 @@ def resize_pos_embed(
     posemb: torch.Tensor,
     posemb_new: torch.Tensor,
     num_prefix_tokens: int = 1,
-    gs_new: Tuple[int, int] = (),
+    gs_new: tuple[int, int] = (),
     interpolation: str = "bicubic",
     antialias: bool = False,
 ) -> torch.Tensor:
@@ -1211,7 +1212,7 @@ def _load_weights(
     #     model.pre_logits.fc.bias.copy_(_n2p(w[f'{prefix}pre_logits/bias']))
     if model.attn_pool is not None:
         block_prefix = f"{prefix}MAPHead_0/"
-        mha_prefix = block_prefix + f"MultiHeadDotProductAttention_0/"
+        mha_prefix = block_prefix + "MultiHeadDotProductAttention_0/"
         model.attn_pool.latent.copy_(_n2p(w[f"{block_prefix}probe"], t=False))
         model.attn_pool.kv.weight.copy_(
             torch.cat(
@@ -1294,10 +1295,10 @@ def _load_weights(
 
 
 def _convert_openai_clip(
-    state_dict: Dict[str, torch.Tensor],
+    state_dict: dict[str, torch.Tensor],
     model: VisionTransformer,
     prefix: str = "visual.",
-) -> Dict[str, torch.Tensor]:
+) -> dict[str, torch.Tensor]:
     out_dict = {}
     swaps = [
         ("conv1", "patch_embed.proj"),
@@ -1332,9 +1333,9 @@ def _convert_openai_clip(
 
 
 def _convert_dinov2(
-    state_dict: Dict[str, torch.Tensor],
+    state_dict: dict[str, torch.Tensor],
     model: VisionTransformer,
-) -> Dict[str, torch.Tensor]:
+) -> dict[str, torch.Tensor]:
     import re
 
     out_dict = {}
@@ -1358,9 +1359,9 @@ def _convert_dinov2(
 
 
 def _convert_aimv2(
-    state_dict: Dict[str, torch.Tensor],
+    state_dict: dict[str, torch.Tensor],
     model: VisionTransformer,
-) -> Dict[str, torch.Tensor]:
+) -> dict[str, torch.Tensor]:
     out_dict = {}
     for k, v in state_dict.items():
         k = k.replace("norm_1", "norm1")
@@ -1376,12 +1377,12 @@ def _convert_aimv2(
 
 
 def checkpoint_filter_fn(
-    state_dict: Dict[str, torch.Tensor],
+    state_dict: dict[str, torch.Tensor],
     model: VisionTransformer,
     adapt_layer_scale: bool = False,
     interpolation: str = "bicubic",
     antialias: bool = True,
-) -> Dict[str, torch.Tensor]:
+) -> dict[str, torch.Tensor]:
     """convert patch embedding weight from manual patchify + linear proj to conv"""
     import re
 
@@ -1463,7 +1464,7 @@ def checkpoint_filter_fn(
     return out_dict
 
 
-def _cfg(url: str = "", **kwargs) -> Dict[str, Any]:
+def _cfg(url: str = "", **kwargs) -> dict[str, Any]:
     return {
         "url": url,
         "num_classes": 1000,

@@ -1,9 +1,10 @@
+import unittest
+
 import torch
+from backends.mlp import MLP
+
 from only_train_once import OTO
 from only_train_once.quantization.quant_model import model_to_quantize_model
-from backends.mlp import MLP
-import unittest
-import os
 
 OUT_DIR = "./cache"
 

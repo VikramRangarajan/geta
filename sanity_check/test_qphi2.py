@@ -1,10 +1,12 @@
-import torch
-from only_train_once import OTO
-import unittest
 import os
+import unittest
+
+import torch
 from backends.hf_phi2.configuration_phi import PhiConfig
 from backends.hf_phi2.modeling_phi import PhiForCausalLM
 from transformers import AutoTokenizer
+
+from only_train_once import OTO
 from only_train_once.quantization.quant_model import model_to_quantize_model
 
 OUT_DIR = "./cache"

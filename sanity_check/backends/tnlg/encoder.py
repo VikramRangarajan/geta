@@ -6,11 +6,12 @@ vectors.
 
 import abc
 import json
-from logging import getLogger
 import os
-from sentencepiece import SentencePieceProcessor
+from logging import getLogger
+
 import tiktoken
 import torch
+from sentencepiece import SentencePieceProcessor
 
 
 def load_dolly_encodings(file_path) -> tuple[dict, dict]:

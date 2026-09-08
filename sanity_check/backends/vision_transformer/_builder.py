@@ -1,32 +1,32 @@
 import dataclasses
 import logging
 import os
+from collections.abc import Callable
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
-
-from torch import nn as nn
-from torch.hub import load_state_dict_from_url
+from typing import Any
 
 from timm.models._features import (
-    FeatureListNet,
     FeatureDictNet,
-    FeatureHookNet,
     FeatureGetterNet,
+    FeatureHookNet,
+    FeatureListNet,
 )
 from timm.models._features_fx import FeatureGraphNet
 from timm.models._helpers import load_state_dict
 from timm.models._hub import (
-    has_hf_hub,
-    download_cached_file,
     check_cached_file,
-    load_state_dict_from_hf,
+    download_cached_file,
+    has_hf_hub,
     load_custom_from_hf,
+    load_state_dict_from_hf,
 )
 from timm.models._manipulate import adapt_input_conv
 from timm.models._pretrained import PretrainedCfg
 from timm.models._prune import adapt_model_from_file
 from timm.models._registry import get_pretrained_cfg
+from torch import nn as nn
+from torch.hub import load_state_dict_from_url
 
 _logger = logging.getLogger(__name__)
 
@@ -37,13 +37,13 @@ _CHECK_HASH = False
 _USE_OLD_CACHE = int(os.environ.get("TIMM_USE_OLD_CACHE", 0)) > 0
 
 __all__ = [
-    "set_pretrained_download_progress",
-    "set_pretrained_check_hash",
+    "build_model_with_cfg",
     "load_custom_pretrained",
     "load_pretrained",
     "pretrained_cfg_for_features",
     "resolve_pretrained_cfg",
-    "build_model_with_cfg",
+    "set_pretrained_check_hash",
+    "set_pretrained_download_progress",
 ]
 
 
@@ -108,9 +108,9 @@ def set_pretrained_check_hash(enable=True):
 
 def load_custom_pretrained(
     model: nn.Module,
-    pretrained_cfg: Optional[Dict] = None,
-    load_fn: Optional[Callable] = None,
-    cache_dir: Optional[Union[str, Path]] = None,
+    pretrained_cfg: dict | None = None,
+    load_fn: Callable | None = None,
+    cache_dir: str | Path | None = None,
 ):
     r"""Loads a custom (read non .pth) weight file
 
@@ -163,12 +163,12 @@ def load_custom_pretrained(
 
 def load_pretrained(
     model: nn.Module,
-    pretrained_cfg: Optional[Dict] = None,
+    pretrained_cfg: dict | None = None,
     num_classes: int = 1000,
     in_chans: int = 3,
-    filter_fn: Optional[Callable] = None,
+    filter_fn: Callable | None = None,
     strict: bool = True,
-    cache_dir: Optional[Union[str, Path]] = None,
+    cache_dir: str | Path | None = None,
 ):
     """Load pretrained checkpoint
 
@@ -189,7 +189,7 @@ def load_pretrained(
 
     load_from, pretrained_loc = _resolve_pretrained_source(pretrained_cfg)
     if load_from == "state_dict":
-        _logger.info(f"Loading pretrained weights from state dict")
+        _logger.info("Loading pretrained weights from state dict")
         state_dict = (
             pretrained_loc  # pretrained_loc is the actual state dict for this override
         )
@@ -255,7 +255,7 @@ def load_pretrained(
     if filter_fn is not None:
         try:
             state_dict = filter_fn(state_dict, model)
-        except TypeError as e:
+        except TypeError:
             # for backwards compat with filter fn that take one arg
             state_dict = filter_fn(state_dict)
 
@@ -272,7 +272,7 @@ def load_pretrained(
                 _logger.info(
                     f"Converted input conv {input_conv_name} pretrained weights from 3 to {in_chans} channel(s)"
                 )
-            except NotImplementedError as e:
+            except NotImplementedError:
                 del state_dict[weight_name]
                 strict = False
                 _logger.warning(
@@ -376,8 +376,8 @@ def _update_default_model_kwargs(pretrained_cfg, kwargs, kwargs_filter):
 
 def resolve_pretrained_cfg(
     variant: str,
-    pretrained_cfg: Optional[Union[str, Dict[str, Any]]] = None,
-    pretrained_cfg_overlay: Optional[Dict[str, Any]] = None,
+    pretrained_cfg: str | dict[str, Any] | None = None,
+    pretrained_cfg_overlay: dict[str, Any] | None = None,
 ) -> PretrainedCfg:
     model_with_tag = variant
     pretrained_tag = None
@@ -414,14 +414,14 @@ def build_model_with_cfg(
     model_cls: Callable,
     variant: str,
     pretrained: bool,
-    pretrained_cfg: Optional[Dict] = None,
-    pretrained_cfg_overlay: Optional[Dict] = None,
-    model_cfg: Optional[Any] = None,
-    feature_cfg: Optional[Dict] = None,
+    pretrained_cfg: dict | None = None,
+    pretrained_cfg_overlay: dict | None = None,
+    model_cfg: Any | None = None,
+    feature_cfg: dict | None = None,
     pretrained_strict: bool = True,
-    pretrained_filter_fn: Optional[Callable] = None,
-    cache_dir: Optional[Union[str, Path]] = None,
-    kwargs_filter: Optional[Tuple[str]] = None,
+    pretrained_filter_fn: Callable | None = None,
+    cache_dir: str | Path | None = None,
+    kwargs_filter: tuple[str] | None = None,
     **kwargs,
 ):
     """Build model with specified default_cfg and optional model_cfg

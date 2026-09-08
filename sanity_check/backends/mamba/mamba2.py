@@ -3,10 +3,9 @@
 import math
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-
 from einops import rearrange, repeat
+from torch import nn
 
 try:
     from causal_conv1d import causal_conv1d_fn, causal_conv1d_update
@@ -18,16 +17,16 @@ try:
 except ImportError:
     selective_state_update = None
 
-from mamba_ssm.ops.triton.layernorm_gated import RMSNorm as RMSNormGated
-
+from mamba_ssm.distributed.distributed_utils import all_reduce, reduce_scatter
 from mamba_ssm.distributed.tensor_parallel import (
     ColumnParallelLinear,
     RowParallelLinear,
 )
-from mamba_ssm.distributed.distributed_utils import all_reduce, reduce_scatter
-
-from mamba_ssm.ops.triton.ssd_combined import mamba_chunk_scan_combined
-from mamba_ssm.ops.triton.ssd_combined import mamba_split_conv1d_scan_combined
+from mamba_ssm.ops.triton.layernorm_gated import RMSNorm as RMSNormGated
+from mamba_ssm.ops.triton.ssd_combined import (
+    mamba_chunk_scan_combined,
+    mamba_split_conv1d_scan_combined,
+)
 
 
 class Mamba2(nn.Module):

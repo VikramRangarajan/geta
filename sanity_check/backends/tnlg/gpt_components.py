@@ -3,11 +3,11 @@
 This module contains the individual components of the Transformer model.
 """
 
+
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as f
-from typing import Union, Tuple
+from torch import nn
 
 
 class RMSNorm(torch.nn.Module):
@@ -55,7 +55,7 @@ def rotary_mat(
     head_scale=1.0,
     device=torch.device("cuda"),
     dtype=torch.float32,
-) -> Tuple[torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Calculate the rotary matrices for the sequence.
 
     Args:
@@ -158,7 +158,7 @@ class SelfAttention(nn.Module):
         hidden_size: int,
         n_heads: int,
         scale_type: str,
-        device: Union[torch.device, None] = None,
+        device: torch.device | None = None,
         use_biases: bool = True,
         interleaved: bool = False,
     ) -> None:
@@ -213,7 +213,7 @@ class SelfAttention(nn.Module):
         v_cache: torch.Tensor,
         pos: int,
         layer_id: int,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Forward pass of the Self-Attention module.
 
         Args:
@@ -297,7 +297,7 @@ class ProjLayer(nn.Module):
     """The projection layer."""
 
     def __init__(
-        self, hidden_size: int, device: Union[torch.device, None] = None
+        self, hidden_size: int, device: torch.device | None = None
     ) -> None:
         """Create a new instance of ProjLayer.
 
@@ -337,7 +337,7 @@ class ProjLayerSiluMatMul(nn.Module):
         self,
         in_feature_size: int,
         hidden_feature_size: int,
-        device: Union[torch.device, None] = None,
+        device: torch.device | None = None,
     ) -> None:
         """Create a new instance of ProjLayerSiluMatMul."""
         super().__init__()

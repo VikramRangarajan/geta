@@ -2,12 +2,12 @@ import unittest
 
 # from PIL import Image
 import torch
-# import requests
+from backends import SamModel
 
+# import requests
 # from transformers import SamProcessor
 from transformers import SamConfig
 
-from backends import SamModel
 from only_train_once import OTO
 
 OUT_DIR = "./cache"

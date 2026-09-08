@@ -9,7 +9,7 @@
 """
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 
 # """Bottleneck layers. Although each layer only produces k
@@ -83,7 +83,7 @@ class DenseNet(nn.Module):
 
         for index in range(len(nblocks) - 1):
             self.features.add_module(
-                "dense_block_layer_{}".format(index),
+                f"dense_block_layer_{index}",
                 self._make_dense_layers(block, inner_channels, nblocks[index]),
             )
             inner_channels += growth_rate * nblocks[index]
@@ -96,13 +96,13 @@ class DenseNet(nn.Module):
                 reduction * inner_channels
             )  # int() will automatic floor the value
             self.features.add_module(
-                "transition_layer_{}".format(index),
+                f"transition_layer_{index}",
                 Transition(inner_channels, out_channels),
             )
             inner_channels = out_channels
 
         self.features.add_module(
-            "dense_block{}".format(len(nblocks) - 1),
+            f"dense_block{len(nblocks) - 1}",
             self._make_dense_layers(block, inner_channels, nblocks[len(nblocks) - 1]),
         )
         inner_channels += growth_rate * nblocks[len(nblocks) - 1]
@@ -125,7 +125,7 @@ class DenseNet(nn.Module):
         dense_block = nn.Sequential()
         for index in range(nblocks):
             dense_block.add_module(
-                "bottle_neck_layer_{}".format(index),
+                f"bottle_neck_layer_{index}",
                 block(in_channels, self.growth_rate),
             )
             in_channels += self.growth_rate

@@ -1,16 +1,12 @@
 # Copyright (c) 2023, Tri Dao, Albert Gu.
 
 import math
-from typing import Optional
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-from torch import Tensor
-
 from einops import rearrange, repeat
-
-from mamba_ssm.ops.selective_scan_interface import selective_scan_fn, mamba_inner_fn
+from mamba_ssm.ops.selective_scan_interface import mamba_inner_fn, selective_scan_fn
+from torch import nn
 
 try:
     from causal_conv1d import causal_conv1d_fn, causal_conv1d_update

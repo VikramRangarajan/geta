@@ -12,22 +12,21 @@ Modifications copyright 2021, Ross Wightman
 # Copyright (c) 2015-present, Facebook, Inc.
 # All rights reserved.
 from functools import partial
-from typing import Optional
 
 import torch
-from torch import nn as nn
-
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import resample_abs_pos_embed
+from torch import nn as nn
 
-# from timm.models.vision_transformer import VisionTransformer, trunc_normal_, checkpoint_filter_fn
-from .vision_transformer import VisionTransformer, trunc_normal_, checkpoint_filter_fn
 from ._builder import build_model_with_cfg
 from ._registry import (
     generate_default_cfgs,
     register_model,
     register_model_deprecations,
 )
+
+# from timm.models.vision_transformer import VisionTransformer, trunc_normal_, checkpoint_filter_fn
+from .vision_transformer import VisionTransformer, checkpoint_filter_fn, trunc_normal_
 
 __all__ = [
     "VisionTransformerDistilled"
@@ -82,7 +81,7 @@ class VisionTransformerDistilled(VisionTransformer):
     def get_classifier(self) -> nn.Module:
         return self.head, self.head_dist
 
-    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+    def reset_classifier(self, num_classes: int, global_pool: str | None = None):
         self.num_classes = num_classes
         self.head = (
             nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()

@@ -5,9 +5,7 @@
 Code Credit: https://raw.githubusercontent.com/weiaicunzai/pytorch-cifar100/master/models/resnet.py
 """
 
-import torch
-import torch.nn as nn
-import copy
+from torch import nn
 
 
 class BasicBlock(nn.Module):

@@ -1,5 +1,5 @@
-import torch.nn as nn
 import torch
+from torch import nn
 
 
 class DepthConv(nn.Module):
@@ -13,7 +13,7 @@ class DepthConv(nn.Module):
         dilation=1,
         groups=None,
     ):
-        super(DepthConv, self).__init__()
+        super().__init__()
         self.conv1 = nn.Conv2d(
             in_channels,
             in_channels,
@@ -45,7 +45,7 @@ normalizations = {
 
 class DemoNetGroupConvCase1(nn.Module):
     def __init__(self, norm_type="in", affine=True, bias=True):
-        super(DemoNetGroupConvCase1, self).__init__()
+        super().__init__()
         self.conv_1 = DepthConv(
             6, 48, kernel_size=(5, 5), stride=(2, 2), padding=(2, 2)
         )

@@ -1,11 +1,10 @@
-import torch
-from only_train_once import OTO
+import os
+import unittest
 
 import torch
 from mamba_ssm import Mamba
 
-import unittest
-import os
+from only_train_once import OTO
 
 OUT_DIR = "./cache"
 

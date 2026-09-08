@@ -1,8 +1,10 @@
-import torch
-from only_train_once import OTO
-from backends import ResNet34_DuBIN
-import unittest
 import os
+import unittest
+
+import torch
+from backends import ResNet34_DuBIN
+
+from only_train_once import OTO
 
 OUT_DIR = "./cache"
 

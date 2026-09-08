@@ -1,7 +1,6 @@
 from abc import ABC, abstractclassmethod
 
 import torch
-import torch.nn as nn
 
 from only_train_once.transform import TensorTransform, index_transformation
 

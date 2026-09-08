@@ -1,6 +1,4 @@
-import numpy as np
 import torch
-from tqdm import tqdm
 
 
 def accuracy_topk(output, target, topk=(1,)):

@@ -1,9 +1,10 @@
+import unittest
+
 import torch
+import torchvision.models
+
 from only_train_once import OTO
 from only_train_once.quantization.quant_model import model_to_quantize_model
-import torchvision.models
-import unittest
-import os
 
 OUT_DIR = "./cache"
 

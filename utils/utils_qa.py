@@ -1,4 +1,3 @@
-# coding=utf-8
 # Copyright 2020 The HuggingFace Team All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,11 +19,9 @@ import collections
 import json
 import logging
 import os
-from typing import Optional, Tuple
 
 import numpy as np
 from tqdm.auto import tqdm
-
 
 logger = logging.getLogger(__name__)
 
@@ -32,14 +29,14 @@ logger = logging.getLogger(__name__)
 def postprocess_qa_predictions(
     examples,
     features,
-    predictions: Tuple[np.ndarray, np.ndarray],
+    predictions: tuple[np.ndarray, np.ndarray],
     version_2_with_negative: bool = False,
     n_best_size: int = 20,
     max_answer_length: int = 30,
     null_score_diff_threshold: float = 0.0,
-    output_dir: Optional[str] = None,
-    prefix: Optional[str] = None,
-    log_level: Optional[int] = logging.WARNING,
+    output_dir: str | None = None,
+    prefix: str | None = None,
+    log_level: int | None = logging.WARNING,
 ):
     """
     Post-processes the predictions of a question-answering model to convert them to answers that are substrings of the
@@ -264,7 +261,7 @@ def postprocess_qa_predictions(
     # If we have an output_dir, let's save all those dicts.
     if output_dir is not None:
         if not os.path.isdir(output_dir):
-            raise EnvironmentError(f"{output_dir} is not a directory.")
+            raise OSError(f"{output_dir} is not a directory.")
 
         prediction_file = os.path.join(
             output_dir,
@@ -299,15 +296,15 @@ def postprocess_qa_predictions(
 def postprocess_qa_predictions_with_beam_search(
     examples,
     features,
-    predictions: Tuple[np.ndarray, np.ndarray],
+    predictions: tuple[np.ndarray, np.ndarray],
     version_2_with_negative: bool = False,
     n_best_size: int = 20,
     max_answer_length: int = 30,
     start_n_top: int = 5,
     end_n_top: int = 5,
-    output_dir: Optional[str] = None,
-    prefix: Optional[str] = None,
-    log_level: Optional[int] = logging.WARNING,
+    output_dir: str | None = None,
+    prefix: str | None = None,
+    log_level: int | None = logging.WARNING,
 ):
     """
     Post-processes the predictions of a question-answering model with beam search to convert them to answers that are substrings of the
@@ -501,7 +498,7 @@ def postprocess_qa_predictions_with_beam_search(
     # If we have an output_dir, let's save all those dicts.
     if output_dir is not None:
         if not os.path.isdir(output_dir):
-            raise EnvironmentError(f"{output_dir} is not a directory.")
+            raise OSError(f"{output_dir} is not a directory.")
 
         prediction_file = os.path.join(
             output_dir,

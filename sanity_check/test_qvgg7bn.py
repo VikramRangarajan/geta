@@ -1,11 +1,12 @@
-import torch
-from only_train_once import OTO
-from only_train_once.quantization.quant_model import model_to_quantize_model
-from backends.vgg7 import vgg7_bn
 
 # from only_train_once.quantization.qvgg7bn import QVGG7_BN
 import unittest
-import os
+
+import torch
+from backends.vgg7 import vgg7_bn
+
+from only_train_once import OTO
+from only_train_once.quantization.quant_model import model_to_quantize_model
 
 OUT_DIR = "./cache"
 

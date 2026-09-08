@@ -1,9 +1,8 @@
-import importlib.util
 import logging
 import os
 import sys
-from torch.utils.data import DataLoader, IterableDataset
-from utils.utils import check_accuracy
+
+from torch.utils.data import IterableDataset
 
 
 def repo_root():

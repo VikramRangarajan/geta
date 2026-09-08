@@ -1,11 +1,13 @@
 from abc import ABC, abstractclassmethod
+
+import numpy as np
 import torch
+
 from only_train_once.transform import (
-    tensor_transformation,
     TensorTransform,
     index_transformation,
+    tensor_transformation,
 )
-import numpy as np
 
 
 class BasicNodeGroup(ABC):

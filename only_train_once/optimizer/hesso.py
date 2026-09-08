@@ -1,14 +1,12 @@
-import torch
 import numpy as np
+import torch
 from torch.optim.optimizer import required
 
-from .importance_score import calculate_importance_score
 from only_train_once.transform import (
-    tensor_transformation,
     TensorTransform,
-    index_transformation,
     index_transformation_param_group,
 )
+
 from .base_hybrid_sparse_optimizer import BaseHybridSparseOptimizer
 
 
@@ -60,7 +58,7 @@ class HESSO(BaseHybridSparseOptimizer):
         else:
             self.importance_score_criteria = importance_score_criteria
 
-        super(HESSO, self).__init__(
+        super().__init__(
             params=params,
             variant=variant,
             lr=lr,

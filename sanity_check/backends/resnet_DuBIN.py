@@ -5,8 +5,8 @@ https://github.com/TAMU-VITA/ATMC/blob/master/cifar/resnet/resnet.py
 """
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
 
 from .resnet_DuBN import DualBatchNorm2d
 
@@ -22,7 +22,7 @@ class DuBIN(nn.Module):
     """
 
     def __init__(self, planes, ratio=0.5):
-        super(DuBIN, self).__init__()
+        super().__init__()
         self.half = int(planes * ratio)
         self.IN = nn.InstanceNorm2d(self.half, affine=True)
         self.BN = DualBatchNorm2d(planes - self.half)
@@ -53,7 +53,7 @@ class DuBIN(nn.Module):
 
 class BasicBlock_DuBIN(nn.Module):
     def __init__(self, in_planes, mid_planes, out_planes, stride=1, ibn=None):
-        super(BasicBlock_DuBIN, self).__init__()
+        super().__init__()
         self.conv1 = nn.Conv2d(
             in_planes, mid_planes, kernel_size=3, stride=stride, padding=1, bias=False
         )
@@ -95,7 +95,7 @@ class BasicBlock_DuBIN_Dense(nn.Module):
     def __init__(
         self, in_planes, mid_planes, out_planes, conv_layer, stride=1, ibn=None
     ):
-        super(BasicBlock_DuBIN_Dense, self).__init__()
+        super().__init__()
         self.conv1 = conv_layer(
             in_planes, mid_planes, kernel_size=3, stride=stride, padding=1, bias=False
         )
@@ -151,7 +151,7 @@ class ResNet_DuBIN(nn.Module):
         For Tiny ImageNet (64*64) images, init_stride=2, num_classes=200;
         See https://github.com/snu-mllab/PuzzleMix/blob/b7a795c1917a075a185aa7ea078bb1453636c2c7/models/preresnet.py#L65.
         """
-        super(ResNet_DuBIN, self).__init__()
+        super().__init__()
         self.in_planes = 64
 
         self.conv1 = nn.Conv2d(
@@ -263,7 +263,7 @@ class Purne_ResNet_DuBIN(nn.Module):
         For Tiny ImageNet (64*64) images, init_stride=2, num_classes=200;
         See https://github.com/snu-mllab/PuzzleMix/blob/b7a795c1917a075a185aa7ea078bb1453636c2c7/models/preresnet.py#L65.
         """
-        super(Purne_ResNet_DuBIN, self).__init__()
+        super().__init__()
         self.ch_list = ch_list
         self.in_planes = self.ch_list[0]
         self.conv_layer = conv_layer

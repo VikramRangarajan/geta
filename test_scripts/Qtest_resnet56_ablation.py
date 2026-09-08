@@ -2,44 +2,41 @@
 Debug script
 """
 
+import argparse
+import json
 import logging
 import math
 import os
-import sys
 import warnings
-import argparse
-import json
+from logging import FileHandler, Formatter
+
+import numpy as np
+import torch
+import torch.nn.functional as F
+from torch import nn
+
+# from PIL import Image
+from torch.utils.data import DataLoader
+from torchvision import transforms
+from torchvision.datasets import CIFAR10
+from tqdm import tqdm
+
+# from transformers import AutoImageProcessor
+from only_train_once import OTO
+from only_train_once.optimizer.utils import (
+    load_checkpoint,
+    save_checkpoint,
+    scan_checkpoint,
+)
+from only_train_once.quantization.quant_model import model_to_quantize_model
+from sanity_check.backends.resnet20_cifar10 import resnet20_cifar10, resnet56_cifar10
+from sanity_check.backends.vgg7 import vgg7_bn
 
 from .geta_common import (
     add_common_args,
     check_accuracy,
     resolve_data_dir,
     resolve_output_dir,
-)
-
-import matplotlib.pyplot as plt
-import numpy as np
-import torch
-import torch.nn as nn
-import torchvision.transforms as transforms
-import torch.nn.functional as F
-
-# from PIL import Image
-from torch.utils.data import DataLoader, IterableDataset
-from torchvision.datasets import CIFAR10
-from tqdm import tqdm
-from logging import FileHandler
-from logging import Formatter
-# from transformers import AutoImageProcessor
-
-from only_train_once import OTO
-from sanity_check.backends.vgg7 import vgg7_bn
-from sanity_check.backends.resnet20_cifar10 import resnet20_cifar10, resnet56_cifar10
-from only_train_once.quantization.quant_model import model_to_quantize_model
-from only_train_once.optimizer.utils import (
-    save_checkpoint,
-    load_checkpoint,
-    scan_checkpoint,
 )
 
 # Ignore warnings
@@ -353,7 +350,7 @@ class WarmupThenScheduler(torch.optim.lr_scheduler.LRScheduler):
         self.warmup_steps = warmup_steps
         self.after_scheduler = after_scheduler
         self.finished = False
-        super(WarmupThenScheduler, self).__init__(optimizer, last_epoch)
+        super().__init__(optimizer, last_epoch)
 
     def get_lr(self):
         if self.last_epoch < self.warmup_steps:
@@ -376,7 +373,7 @@ class WarmupThenScheduler(torch.optim.lr_scheduler.LRScheduler):
             else:
                 self.after_scheduler.step(epoch - self.warmup_steps)
         else:
-            return super(WarmupThenScheduler, self).step(epoch)
+            return super().step(epoch)
 
 
 def main(config):
@@ -445,7 +442,7 @@ def main(config):
     output_logger.info(f"Start pruning step: {pruning_start_step:^3d}")
     output_logger.info(f"Pruning steps: {pruning_steps:^3d}")
     output_logger.info(f"Learning rate scheduler steps: {lr_step:^3d}")
-    output_logger.info(f"=======================================")
+    output_logger.info("=======================================")
 
     torch.manual_seed(seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

@@ -1,10 +1,12 @@
+import os
+import unittest
+
+import numpy as np
+import onnxruntime as ort
 import torch
+
 from only_train_once import OTO
 from only_train_once.quantization.quant_model import model_to_quantize_model
-import unittest
-import os
-import onnxruntime as ort
-import numpy as np
 
 OUT_DIR = "./cache"
 

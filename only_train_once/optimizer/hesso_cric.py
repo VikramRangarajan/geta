@@ -1,12 +1,14 @@
-import torch
 import numpy as np
+import torch
 from torch.optim.optimizer import required
-from .base_hybrid_sparse_optimizer import BaseHybridSparseOptimizer
+
 from only_train_once.transform import (
-    tensor_transformation,
     TensorTransform,
     index_transformation_param_group,
+    tensor_transformation,
 )
+
+from .base_hybrid_sparse_optimizer import BaseHybridSparseOptimizer
 
 
 class HESSOCRIC(BaseHybridSparseOptimizer):
@@ -56,7 +58,7 @@ class HESSOCRIC(BaseHybridSparseOptimizer):
         else:
             self.importance_score_criteria = importance_score_criteria
 
-        super(HESSOCRIC, self).__init__(
+        super().__init__(
             params=params,
             variant=variant,
             lr=lr,
@@ -148,9 +150,7 @@ class HESSOCRIC(BaseHybridSparseOptimizer):
         return num_violating_groups
 
     def cric_terminate(self):
-        if self.curr_cycle_period >= self.max_cycle_period:
-            return True
-        elif (
+        if self.curr_cycle_period >= self.max_cycle_period or (
             self.curr_cycle_period >= 1
             and self.compute_num_active_violating_groups() <= self.tolerance
         ):
@@ -447,7 +447,6 @@ class HESSOCRIC(BaseHybridSparseOptimizer):
             self.is_cric_terminated = True
             self.cric_terminated_step = self.num_steps
             # TODO: Remove redundant information for saving memory
-        return
 
     def compute_accumulate_saliency_score(self):
         # Compute accumulated saliency score

@@ -1,10 +1,11 @@
 import math
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import numbers
-import numpy as np
 from functools import partial
+
+import numpy as np
+import torch
+import torch.nn.functional as F
+from torch import nn
 
 
 def make_beta_schedule(
@@ -95,7 +96,7 @@ class ResBlock(nn.Module):
         res_scale=1,
     ):
 
-        super(ResBlock, self).__init__()
+        super().__init__()
         m = []
         for i in range(2):
             m.append(conv(n_feats, n_feats, kernel_size, bias=bias))
@@ -131,7 +132,7 @@ class Upsampler(nn.Sequential):
         else:
             raise NotImplementedError
 
-        super(Upsampler, self).__init__(*m)
+        super().__init__(*m)
 
 
 class DDPM(nn.Module):
@@ -306,7 +307,7 @@ class DDPM(nn.Module):
         x_noisy = torch.zeros(shape, device=device)
         c = self.condition(img)
         IPR = x_noisy
-        for i in reversed(range(0, self.num_timesteps)):
+        for i in reversed(range(self.num_timesteps)):
             IPR, _ = self.p_sample(
                 IPR,
                 torch.full((b,), i, device=device, dtype=torch.long),
@@ -318,7 +319,7 @@ class DDPM(nn.Module):
 
 class BiasFree_LayerNorm(nn.Module):
     def __init__(self, normalized_shape):
-        super(BiasFree_LayerNorm, self).__init__()
+        super().__init__()
         if isinstance(normalized_shape, numbers.Integral):
             normalized_shape = (normalized_shape,)
         normalized_shape = torch.Size(normalized_shape)
@@ -335,7 +336,7 @@ class BiasFree_LayerNorm(nn.Module):
 
 class BiasFree_LayerNorm(nn.Module):
     def __init__(self, normalized_shape):
-        super(BiasFree_LayerNorm, self).__init__()
+        super().__init__()
         if isinstance(normalized_shape, numbers.Integral):
             normalized_shape = (normalized_shape,)
         normalized_shape = torch.Size(normalized_shape)
@@ -352,7 +353,7 @@ class BiasFree_LayerNorm(nn.Module):
 
 class BiasFree_CIP_LayerNorm(nn.Module):
     def __init__(self, normalized_shape):
-        super(BiasFree_CIP_LayerNorm, self).__init__()
+        super().__init__()
         # if isinstance(normalized_shape, numbers.Integral):
         #     normalized_shape = (normalized_shape,)
         # normalized_shape = torch.Size(normalized_shape)
@@ -381,7 +382,7 @@ class BiasFree_CIP_LayerNorm(nn.Module):
 
 class WithBias_LayerNorm(nn.Module):
     def __init__(self, normalized_shape):
-        super(WithBias_LayerNorm, self).__init__()
+        super().__init__()
         if isinstance(normalized_shape, numbers.Integral):
             normalized_shape = (normalized_shape,)
         normalized_shape = torch.Size(normalized_shape)
@@ -400,7 +401,7 @@ class WithBias_LayerNorm(nn.Module):
 
 class LayerNorm(nn.Module):
     def __init__(self, dim, LayerNorm_type):
-        super(LayerNorm, self).__init__()
+        super().__init__()
         if LayerNorm_type == "BiasFree":
             # self.body = BiasFree_LayerNorm(dim)
             self.body = BiasFree_CIP_LayerNorm(dim)
@@ -414,7 +415,7 @@ class LayerNorm(nn.Module):
 
 class FeedForward(nn.Module):
     def __init__(self, dim, ffn_expansion_factor, bias):
-        super(FeedForward, self).__init__()
+        super().__init__()
 
         hidden_features = int(dim * ffn_expansion_factor)
 
@@ -450,7 +451,7 @@ class FeedForward(nn.Module):
 
 class ConvMHA(nn.Module):
     def __init__(self, dim, num_heads, bias):
-        super(ConvMHA, self).__init__()
+        super().__init__()
         self.num_heads = num_heads
         self.head_dim = dim // num_heads
         self.temperature = nn.Parameter(torch.ones(num_heads, 1, 1))
@@ -498,7 +499,7 @@ class ConvMHA(nn.Module):
 
 class Attention(nn.Module):
     def __init__(self, dim, num_heads, bias):
-        super(Attention, self).__init__()
+        super().__init__()
         self.num_heads = num_heads
         # self.temperature = nn.Parameter(torch.ones(num_heads, 1, 1))
         self.kernel = nn.Sequential(
@@ -517,7 +518,7 @@ class Attention(nn.Module):
 
 class TransformerBlock(nn.Module):
     def __init__(self, dim, num_heads, ffn_expansion_factor, bias, LayerNorm_type):
-        super(TransformerBlock, self).__init__()
+        super().__init__()
 
         self.norm1 = LayerNorm(dim, LayerNorm_type)
         self.attn = Attention(dim, num_heads, bias)
@@ -535,7 +536,7 @@ class TransformerBlock(nn.Module):
 
 class OverlapPatchEmbed(nn.Module):
     def __init__(self, in_c=3, embed_dim=48, bias=False):
-        super(OverlapPatchEmbed, self).__init__()
+        super().__init__()
 
         self.proj = nn.Conv2d(
             in_c, embed_dim, kernel_size=3, stride=1, padding=1, bias=bias
@@ -549,7 +550,7 @@ class OverlapPatchEmbed(nn.Module):
 
 class Downsample(nn.Module):
     def __init__(self, n_feat):
-        super(Downsample, self).__init__()
+        super().__init__()
 
         self.body = nn.Sequential(
             nn.Conv2d(
@@ -571,7 +572,7 @@ class Downsample(nn.Module):
 
 class Upsample(nn.Module):
     def __init__(self, n_feat):
-        super(Upsample, self).__init__()
+        super().__init__()
 
         self.body = nn.Sequential(
             nn.Conv2d(
@@ -603,7 +604,7 @@ class DIRformerDownPath(nn.Module):
         bias=False,
         LayerNorm_type="WithBias",  ## Other option 'BiasFree'
     ):
-        super(DIRformerDownPath, self).__init__()
+        super().__init__()
         self.scale = scale
         if self.scale == 2:
             inp_channels = 12
@@ -701,7 +702,7 @@ class DIRformerUpPath(nn.Module):
         out_channels=3,
     ):
 
-        super(DIRformerUpPath, self).__init__()
+        super().__init__()
 
         self.up4_3 = Upsample(int(dim * 2**3))  ## From Level 4 to Level 3
         self.reduce_chan_level3 = nn.Conv2d(
@@ -814,7 +815,7 @@ class DIRformer(nn.Module):
         LayerNorm_type="WithBias",  ## Other option 'BiasFree'
     ):
 
-        super(DIRformer, self).__init__()
+        super().__init__()
         self.scale = scale
         if self.scale == 2:
             inp_channels = 12
@@ -855,9 +856,7 @@ class DIRformer(nn.Module):
         # self.tail = nn.Sequential(*modules_tail)
 
     def forward(self, inp_img, k_v):
-        if self.scale == 2:
-            feat = self.pixel_unshuffle(inp_img)
-        elif self.scale == 1:
+        if self.scale == 2 or self.scale == 1:
             feat = self.pixel_unshuffle(inp_img)
         else:
             feat = inp_img
@@ -884,7 +883,7 @@ class DIRformer(nn.Module):
 
 class CPEN(nn.Module):
     def __init__(self, n_feats=64, n_encoder_res=6, scale=4):
-        super(CPEN, self).__init__()
+        super().__init__()
         self.scale = scale
         if scale == 2:
             E1 = [
@@ -940,7 +939,7 @@ class CPEN(nn.Module):
 
 class ResMLP(nn.Module):
     def __init__(self, n_feats=512):
-        super(ResMLP, self).__init__()
+        super().__init__()
         self.resmlp = nn.Sequential(
             nn.Linear(n_feats, n_feats),
             nn.LeakyReLU(0.1, True),
@@ -953,7 +952,7 @@ class ResMLP(nn.Module):
 
 class denoise(nn.Module):
     def __init__(self, n_feats=64, n_denoise_res=5, timesteps=5):
-        super(denoise, self).__init__()
+        super().__init__()
         self.max_period = timesteps * 10
         n_featsx4 = 4 * n_feats
         resmlp = [
@@ -994,7 +993,7 @@ class DiffIRS3SNPE(nn.Module):
         linear_end=0.99,
         timesteps=4,
     ):
-        super(DiffIRS3SNPE, self).__init__()
+        super().__init__()
 
         # Generator
         self.G = DIRformer(

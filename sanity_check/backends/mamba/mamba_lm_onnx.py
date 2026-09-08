@@ -1,9 +1,8 @@
-from dataclasses import dataclass, fields, asdict
 import json
+from dataclasses import asdict, dataclass, fields
 
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
+from torch import nn
 
 from .mamba_onnx import Mamba, MambaConfig, RMSNorm
 
@@ -58,7 +57,7 @@ def from_pretrained(name: str):
         model: a Mamba model configured with the proper parameters and initialized with the proper weights
     """
 
-    from transformers.utils import WEIGHTS_NAME, CONFIG_NAME
+    from transformers.utils import CONFIG_NAME, WEIGHTS_NAME
     from transformers.utils.hub import cached_file
 
     def load_config_hf(model_name):

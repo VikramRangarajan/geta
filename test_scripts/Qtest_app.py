@@ -2,21 +2,14 @@ import logging
 import math
 import os
 
-from .geta_common import (
-    check_accuracy,
-    resolve_data_dir,
-    resolve_output_dir,
-    StreamingDataset,
-)
-
 import numpy as np
 import torch
-import torch.nn as nn
-import torchvision.transforms as transforms
 import typer
 from datasets import load_dataset
 from PIL import Image
-from torch.utils.data import DataLoader, IterableDataset
+from torch import nn
+from torch.utils.data import DataLoader
+from torchvision import transforms
 from torchvision.datasets import CIFAR10
 from tqdm import tqdm
 from transformers import AutoImageProcessor
@@ -26,6 +19,13 @@ from only_train_once.quantization.quant_model import model_to_quantize_model
 from sanity_check.backends.resnet20_cifar10 import resnet20_cifar10
 from sanity_check.backends.resnet_cifar10 import resnet18_cifar10
 from sanity_check.backends.vgg7 import vgg7_bn
+
+from .geta_common import (
+    StreamingDataset,
+    check_accuracy,
+    resolve_data_dir,
+    resolve_output_dir,
+)
 
 # Set up logging
 logging.basicConfig(

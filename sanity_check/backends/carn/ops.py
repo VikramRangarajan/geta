@@ -1,8 +1,8 @@
 import math
+
 import torch
-import torch.nn as nn
-import torch.nn.init as init
 import torch.nn.functional as F
+from torch import nn
 
 
 def init_weights(modules):
@@ -11,7 +11,7 @@ def init_weights(modules):
 
 class MeanShift(nn.Module):
     def __init__(self, mean_rgb, sub):
-        super(MeanShift, self).__init__()
+        super().__init__()
 
         sign = -1 if sub else 1
         r = mean_rgb[0] * sign
@@ -33,7 +33,7 @@ class MeanShift(nn.Module):
 
 class BasicBlock(nn.Module):
     def __init__(self, in_channels, out_channels, ksize=3, stride=1, pad=1):
-        super(BasicBlock, self).__init__()
+        super().__init__()
 
         self.body = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, ksize, stride, pad),
@@ -49,7 +49,7 @@ class BasicBlock(nn.Module):
 
 class ResidualBlock(nn.Module):
     def __init__(self, in_channels, out_channels):
-        super(ResidualBlock, self).__init__()
+        super().__init__()
 
         self.body = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, 3, 1, 1),
@@ -67,7 +67,7 @@ class ResidualBlock(nn.Module):
 
 class EResidualBlock(nn.Module):
     def __init__(self, in_channels, out_channels, group=1):
-        super(EResidualBlock, self).__init__()
+        super().__init__()
 
         self.body = nn.Sequential(
             nn.Conv2d(in_channels, out_channels, 3, 1, 1, groups=group),
@@ -87,7 +87,7 @@ class EResidualBlock(nn.Module):
 
 class UpsampleBlock(nn.Module):
     def __init__(self, n_channels, scale, multi_scale, group=1):
-        super(UpsampleBlock, self).__init__()
+        super().__init__()
 
         if multi_scale:
             self.up2 = _UpsampleBlock(n_channels, scale=2, group=group)
@@ -112,7 +112,7 @@ class UpsampleBlock(nn.Module):
 
 class _UpsampleBlock(nn.Module):
     def __init__(self, n_channels, scale, group=1):
-        super(_UpsampleBlock, self).__init__()
+        super().__init__()
 
         modules = []
         if scale == 2 or scale == 4 or scale == 8:

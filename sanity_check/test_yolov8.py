@@ -1,8 +1,10 @@
-import torch
-from only_train_once import OTO
-import unittest
 import os
+import unittest
+
+import torch
 from ultralytics import YOLO
+
+from only_train_once import OTO
 
 OUT_DIR = "./cache"
 

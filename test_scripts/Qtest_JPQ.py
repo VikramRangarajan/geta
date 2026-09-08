@@ -9,22 +9,15 @@ import math
 import os
 import warnings
 
-from .geta_common import (
-    add_common_args,
-    check_accuracy,
-    resolve_data_dir,
-    resolve_output_dir,
-)
-
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-import torchvision.transforms as transforms
+from torch import nn
 
 # from PIL import Image
-from torch.utils.data import DataLoader, IterableDataset
+from torch.utils.data import DataLoader
+from torchvision import transforms
 from torchvision.datasets import CIFAR10
 from tqdm import tqdm
 
@@ -39,6 +32,13 @@ from only_train_once.quantization.quant_layers import QuantizationMode
 from only_train_once.quantization.quant_model import model_to_quantize_model
 from sanity_check.backends.resnet20_cifar10 import resnet56_cifar10
 from sanity_check.backends.vgg7 import vgg7_bn
+
+from .geta_common import (
+    add_common_args,
+    check_accuracy,
+    resolve_data_dir,
+    resolve_output_dir,
+)
 
 # Ignore warnings
 warnings.filterwarnings("ignore")

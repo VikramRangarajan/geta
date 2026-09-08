@@ -1,12 +1,11 @@
 import unittest
-from PIL import Image
-import torch
-import requests
-from transformers import WhisperProcessor
-from backends import WhisperForConditionalGeneration
-from only_train_once import OTO
 
+import torch
+from backends import WhisperForConditionalGeneration
 from datasets import load_dataset
+from transformers import WhisperProcessor
+
+from only_train_once import OTO
 
 OUT_DIR = "./cache"
 

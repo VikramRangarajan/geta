@@ -1,10 +1,12 @@
 # HESSO on resnet56 Cifar10 dataset
-from sanity_check.backends.resnet20_cifar10 import resnet56_cifar10
-from only_train_once import OTO
-import torch
-from torchvision.datasets import CIFAR10
-import torchvision.transforms as transforms
 import argparse
+
+import torch
+from torchvision import transforms
+from torchvision.datasets import CIFAR10
+
+from only_train_once import OTO
+from sanity_check.backends.resnet20_cifar10 import resnet56_cifar10
 
 
 def get_config():
@@ -106,21 +108,11 @@ def main(config):
         f_avg_val = f_avg_val.cpu().item() / len(trainloader)
 
         print(
-            "Ep: {ep}, loss: {f:.2f}, norm_all:{param_norm:.2f}, grp_sparsity: {gs:.2f}, acc1: {acc1:.4f}, norm_import: {norm_import:.2f}, norm_redund: {norm_redund:.2f}, num_grp_import: {num_grps_import}, num_grp_redund: {num_grps_redund}".format(
-                ep=epoch,
-                f=f_avg_val,
-                param_norm=opt_metrics.norm_params,
-                gs=opt_metrics.group_sparsity,
-                acc1=accuracy1,
-                norm_import=opt_metrics.norm_important_groups,
-                norm_redund=opt_metrics.norm_redundant_groups,
-                num_grps_import=opt_metrics.num_important_groups,
-                num_grps_redund=opt_metrics.num_redundant_groups,
-            )
+            f"Ep: {epoch}, loss: {f_avg_val:.2f}, norm_all:{opt_metrics.norm_params:.2f}, grp_sparsity: {opt_metrics.group_sparsity:.2f}, acc1: {accuracy1:.4f}, norm_import: {opt_metrics.norm_important_groups:.2f}, norm_redund: {opt_metrics.norm_redundant_groups:.2f}, num_grp_import: {opt_metrics.num_important_groups}, num_grp_redund: {opt_metrics.num_redundant_groups}"
         )
 
     # save the .pt file
-    torch.save(model, f"resnet56_best_{str(config.sparsity)}.pt")
+    torch.save(model, f"resnet56_best_{config.sparsity!s}.pt")
 
 
 if __name__ == "__main__":

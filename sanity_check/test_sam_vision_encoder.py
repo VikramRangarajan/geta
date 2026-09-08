@@ -1,10 +1,11 @@
+import os
 import unittest
+
 import torch
+from backends import SamModel
 from transformers import SamConfig
 
-from backends import SamModel
 from only_train_once import OTO
-import os
 
 OUT_DIR = "./cache"
 
@@ -57,7 +58,6 @@ class TestSamVisionEncoder(unittest.TestCase):
 
         # for name, param in compressed_sam_encoder.named_parameters():
         #     print(name, param.shape)
-        return
 
 
 if __name__ == "__main__":

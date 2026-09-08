@@ -2,7 +2,7 @@
 Using https://pytorch.org/vision/stable/feature_extraction.html
 """
 
-from typing import Callable, Dict, List, Optional, Union, Tuple, Type
+from collections.abc import Callable
 
 import torch
 from torch import nn
@@ -24,36 +24,37 @@ except ImportError:
 
 # Layers we went to treat as leaf modules
 from timm.layers import (
-    Conv2dSame,
-    ScaledStdConv2dSame,
     CondConv2d,
-    StdConv2dSame,
+    Conv2dSame,
     Format,
+    ScaledStdConv2dSame,
+    StdConv2dSame,
+    resample_abs_pos_embed,
+    resample_abs_pos_embed_nhwc,
 )
-from timm.layers import resample_abs_pos_embed, resample_abs_pos_embed_nhwc
 from timm.layers.non_local_attn import BilinearAttnTransform
-from timm.layers.pool2d_same import MaxPool2dSame, AvgPool2dSame
 from timm.layers.norm_act import (
     BatchNormAct2d,
-    SyncBatchNormAct,
     FrozenBatchNormAct2d,
-    GroupNormAct,
     GroupNorm1Act,
+    GroupNormAct,
     LayerNormAct,
     LayerNormAct2d,
+    SyncBatchNormAct,
 )
+from timm.layers.pool2d_same import AvgPool2dSame, MaxPool2dSame
 
 __all__ = [
-    "register_notrace_module",
-    "is_notrace_module",
-    "get_notrace_modules",
-    "register_notrace_function",
-    "is_notrace_function",
-    "get_notrace_functions",
-    "create_feature_extractor",
-    "get_graph_node_names",
     "FeatureGraphNet",
     "GraphExtractNet",
+    "create_feature_extractor",
+    "get_graph_node_names",
+    "get_notrace_functions",
+    "get_notrace_modules",
+    "is_notrace_function",
+    "is_notrace_module",
+    "register_notrace_function",
+    "register_notrace_module",
 ]
 
 
@@ -85,7 +86,7 @@ except ImportError:
     pass
 
 
-def register_notrace_module(module: Type[nn.Module]):
+def register_notrace_module(module: type[nn.Module]):
     """
     Any module not under timm.models.layers should get this decorator if we don't want to trace through it.
     """
@@ -93,7 +94,7 @@ def register_notrace_module(module: Type[nn.Module]):
     return module
 
 
-def is_notrace_module(module: Type[nn.Module]):
+def is_notrace_module(module: type[nn.Module]):
     return module in _leaf_modules
 
 
@@ -124,7 +125,7 @@ def get_notrace_functions():
     return list(_autowrap_functions)
 
 
-def get_graph_node_names(model: nn.Module) -> Tuple[List[str], List[str]]:
+def get_graph_node_names(model: nn.Module) -> tuple[list[str], list[str]]:
     return _get_graph_node_names(
         model,
         tracer_kwargs={
@@ -135,7 +136,7 @@ def get_graph_node_names(model: nn.Module) -> Tuple[List[str], List[str]]:
 
 
 def create_feature_extractor(
-    model: nn.Module, return_nodes: Union[Dict[str, str], List[str]]
+    model: nn.Module, return_nodes: dict[str, str] | list[str]
 ):
     assert has_fx_feature_extraction, (
         "Please update to PyTorch 1.10+, torchvision 0.11+ for FX feature extraction"
@@ -158,8 +159,8 @@ class FeatureGraphNet(nn.Module):
     def __init__(
         self,
         model: nn.Module,
-        out_indices: Tuple[int, ...],
-        out_map: Optional[Dict] = None,
+        out_indices: tuple[int, ...],
+        out_map: dict | None = None,
         output_fmt: str = "NCHW",
         return_dict: bool = False,
     ):
@@ -202,7 +203,7 @@ class GraphExtractNet(nn.Module):
     def __init__(
         self,
         model: nn.Module,
-        return_nodes: Union[Dict[str, str], List[str]],
+        return_nodes: dict[str, str] | list[str],
         squeeze_out: bool = True,
         return_dict: bool = False,
     ):
@@ -211,7 +212,7 @@ class GraphExtractNet(nn.Module):
         self.graph_module = create_feature_extractor(model, return_nodes)
         self.return_dict = return_dict
 
-    def forward(self, x) -> Union[List[torch.Tensor], torch.Tensor]:
+    def forward(self, x) -> list[torch.Tensor] | torch.Tensor:
         out = self.graph_module(x)
         if self.return_dict:
             return out

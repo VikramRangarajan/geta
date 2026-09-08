@@ -1,8 +1,10 @@
-import torch
-from only_train_once import OTO
-import torchvision.models
-import unittest
 import os
+import unittest
+
+import torch
+import torchvision.models
+
+from only_train_once import OTO
 
 OUT_DIR = "./cache"
 

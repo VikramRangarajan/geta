@@ -7,63 +7,55 @@ import re
 import sys
 import warnings
 from collections import defaultdict, deque
+from collections.abc import Callable, Sequence
 from copy import deepcopy
 from dataclasses import replace
 from typing import (
     Any,
-    Callable,
-    Dict,
-    Iterable,
-    List,
-    Optional,
-    Set,
-    Sequence,
-    Union,
-    Tuple,
 )
 
-from ._pretrained import PretrainedCfg, DefaultCfg
+from ._pretrained import DefaultCfg, PretrainedCfg
 
 __all__ = [
-    "split_model_name_tag",
-    "get_arch_name",
-    "register_model",
     "generate_default_cfgs",
-    "list_models",
-    "list_pretrained",
-    "is_model",
-    "model_entrypoint",
-    "list_modules",
-    "is_model_in_modules",
-    "get_pretrained_cfg_value",
-    "is_model_pretrained",
+    "get_arch_name",
     "get_arch_pretrained_cfgs",
+    "get_pretrained_cfg_value",
+    "is_model",
+    "is_model_in_modules",
+    "is_model_pretrained",
+    "list_models",
+    "list_modules",
+    "list_pretrained",
+    "model_entrypoint",
+    "register_model",
+    "split_model_name_tag",
 ]
 
-_module_to_models: Dict[str, Set[str]] = defaultdict(
+_module_to_models: dict[str, set[str]] = defaultdict(
     set
 )  # dict of sets to check membership of model in module
-_model_to_module: Dict[str, str] = {}  # mapping of model names to module names
-_model_entrypoints: Dict[
+_model_to_module: dict[str, str] = {}  # mapping of model names to module names
+_model_entrypoints: dict[
     str, Callable[..., Any]
 ] = {}  # mapping of model names to architecture entrypoint fns
-_model_has_pretrained: Set[str] = (
+_model_has_pretrained: set[str] = (
     set()
 )  # set of model names that have pretrained weight url present
-_model_default_cfgs: Dict[
+_model_default_cfgs: dict[
     str, PretrainedCfg
 ] = {}  # central repo for model arch -> default cfg objects
-_model_pretrained_cfgs: Dict[
+_model_pretrained_cfgs: dict[
     str, PretrainedCfg
 ] = {}  # central repo for model arch.tag -> pretrained cfgs
-_model_with_tags: Dict[str, List[str]] = defaultdict(
+_model_with_tags: dict[str, list[str]] = defaultdict(
     list
 )  # shortcut to map each model arch to all model + tag names
-_module_to_deprecated_models: Dict[str, Dict[str, Optional[str]]] = defaultdict(dict)
-_deprecated_models: Dict[str, Optional[str]] = {}
+_module_to_deprecated_models: dict[str, dict[str, str | None]] = defaultdict(dict)
+_deprecated_models: dict[str, str | None] = {}
 
 
-def split_model_name_tag(model_name: str, no_tag: str = "") -> Tuple[str, str]:
+def split_model_name_tag(model_name: str, no_tag: str = "") -> tuple[str, str]:
     model_name, *tag_list = model_name.split(".", 1)
     tag = tag_list[0] if tag_list else no_tag
     return model_name, tag
@@ -73,7 +65,7 @@ def get_arch_name(model_name: str) -> str:
     return split_model_name_tag(model_name)[0]
 
 
-def generate_default_cfgs(cfgs: Dict[str, Union[Dict[str, Any], PretrainedCfg]]):
+def generate_default_cfgs(cfgs: dict[str, dict[str, Any] | PretrainedCfg]):
     out = defaultdict(DefaultCfg)
     default_set = set()  # no tag and tags ending with * are prioritized as default
 
@@ -200,7 +192,7 @@ def _deprecated_model_shim(
 
 
 def register_model_deprecations(
-    module_name: str, deprecation_map: Dict[str, Optional[str]]
+    module_name: str, deprecation_map: dict[str, str | None]
 ):
     mod = sys.modules[module_name]
     module_name_split = module_name.split(".")
@@ -225,7 +217,7 @@ def register_model_deprecations(
         _module_to_deprecated_models[module_name][deprecated] = current
 
 
-def _natural_key(string_: str) -> List[Union[int, str]]:
+def _natural_key(string_: str) -> list[int | str]:
     """See https://blog.codinghorror.com/sorting-for-humans-natural-sort-order/"""
     return [int(s) if s.isdigit() else s for s in re.split(r"(\d+)", string_.lower())]
 
@@ -240,13 +232,13 @@ def _expand_filter(filter: str):
 
 
 def list_models(
-    filter: Union[str, List[str]] = "",
-    module: Union[str, List[str]] = "",
+    filter: str | list[str] = "",
+    module: str | list[str] = "",
     pretrained: bool = False,
-    exclude_filters: Union[str, List[str]] = "",
+    exclude_filters: str | list[str] = "",
     name_matches_cfg: bool = False,
-    include_tags: Optional[bool] = None,
-) -> List[str]:
+    include_tags: bool | None = None,
+) -> list[str]:
     """Return list of available model names, sorted alphabetically
 
     Args:
@@ -275,13 +267,13 @@ def list_models(
         include_tags = pretrained
 
     if not module:
-        all_models: Set[str] = set(_model_entrypoints.keys())
+        all_models: set[str] = set(_model_entrypoints.keys())
     else:
         if isinstance(module, str):
-            all_models: Set[str] = _module_to_models[module]
+            all_models: set[str] = _module_to_models[module]
         else:
             assert isinstance(module, Sequence)
-            all_models: Set[str] = set()
+            all_models: set[str] = set()
             for m in module:
                 all_models.update(_module_to_models[m])
     all_models = (
@@ -290,7 +282,7 @@ def list_models(
 
     if include_tags:
         # expand model names to include names w/ pretrained tags
-        models_with_tags: Set[str] = set()
+        models_with_tags: set[str] = set()
         for m in all_models:
             models_with_tags.update(_model_with_tags[m])
         all_models = models_with_tags
@@ -299,7 +291,7 @@ def list_models(
         exclude_filters = [ef for f in exclude_filters for ef in _expand_filter(f)]
 
     if include_filters:
-        models: Set[str] = set()
+        models: set[str] = set()
         for f in include_filters:
             include_models = fnmatch.filter(all_models, f)  # include these models
             if len(include_models):
@@ -325,9 +317,9 @@ def list_models(
 
 
 def list_pretrained(
-    filter: Union[str, List[str]] = "",
+    filter: str | list[str] = "",
     exclude_filters: str = "",
-) -> List[str]:
+) -> list[str]:
     return list_models(
         filter=filter,
         pretrained=True,
@@ -336,7 +328,7 @@ def list_pretrained(
     )
 
 
-def get_deprecated_models(module: str = "") -> Dict[str, str]:
+def get_deprecated_models(module: str = "") -> dict[str, str]:
     all_deprecated = (
         _module_to_deprecated_models[module] if module else _deprecated_models
     )
@@ -350,7 +342,7 @@ def is_model(model_name: str) -> bool:
 
 
 def model_entrypoint(
-    model_name: str, module_filter: Optional[str] = None
+    model_name: str, module_filter: str | None = None
 ) -> Callable[..., Any]:
     """Fetch a model entrypoint for specified model name"""
     arch_name = get_arch_name(model_name)
@@ -359,14 +351,14 @@ def model_entrypoint(
     return _model_entrypoints[arch_name]
 
 
-def list_modules() -> List[str]:
+def list_modules() -> list[str]:
     """Return list of module names that contain models / model entrypoints"""
     modules = _module_to_models.keys()
     return sorted(modules)
 
 
 def is_model_in_modules(
-    model_name: str, module_names: Union[Tuple[str, ...], List[str], Set[str]]
+    model_name: str, module_names: tuple[str, ...] | list[str] | set[str]
 ) -> bool:
     """Check if a model exists within a subset of modules
 
@@ -385,7 +377,7 @@ def is_model_pretrained(model_name: str) -> bool:
 
 def get_pretrained_cfg(
     model_name: str, allow_unregistered: bool = True
-) -> Optional[PretrainedCfg]:
+) -> PretrainedCfg | None:
     if model_name in _model_pretrained_cfgs:
         return deepcopy(_model_pretrained_cfgs[model_name])
     arch_name, tag = split_model_name_tag(model_name)
@@ -400,13 +392,13 @@ def get_pretrained_cfg(
     )
 
 
-def get_pretrained_cfg_value(model_name: str, cfg_key: str) -> Optional[Any]:
+def get_pretrained_cfg_value(model_name: str, cfg_key: str) -> Any | None:
     """Get a specific model default_cfg value by key. None if key doesn't exist."""
     cfg = get_pretrained_cfg(model_name, allow_unregistered=False)
     return getattr(cfg, cfg_key, None)
 
 
-def get_arch_pretrained_cfgs(model_name: str) -> Dict[str, PretrainedCfg]:
+def get_arch_pretrained_cfgs(model_name: str) -> dict[str, PretrainedCfg]:
     """Get all pretrained cfgs for a given architecture."""
     arch_name, _ = split_model_name_tag(model_name)
     model_names = _model_with_tags[arch_name]

@@ -1,7 +1,7 @@
 import pytest
 import torch
-import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
+from torchvision import transforms
 from torchvision.datasets import CIFAR10
 
 from only_train_once import OTO

@@ -1,9 +1,11 @@
-import torch
-from only_train_once import OTO
-import unittest
 import os
+import unittest
+
+import torch
 from backends import PhiConfig, PhiForCausalLM
 from transformers import AutoTokenizer
+
+from only_train_once import OTO
 
 OUT_DIR = "./cache"
 

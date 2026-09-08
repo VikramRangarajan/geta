@@ -1,8 +1,10 @@
-import torch
-from only_train_once import OTO
-from backends import densenet121
-import unittest
 import os
+import unittest
+
+import torch
+from backends import densenet121
+
+from only_train_once import OTO
 
 OUT_DIR = "./cache"
 

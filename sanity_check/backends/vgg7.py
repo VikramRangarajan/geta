@@ -9,11 +9,11 @@ Reference:
 
 """
 
-from typing import List, Union, cast
+from typing import cast
 
 import torch
 from torch import nn
-import torch.nn.init as init  # for weight initialization.
+from torch.nn import init  # for weight initialization.
 
 
 def _weights_init(m):
@@ -69,11 +69,11 @@ def _make_layers(vgg_cfg, batch_norm: bool = False):
 class VGG7_BN(nn.Module):
     def __init__(
         self,
-        vgg_cfg: List[Union[int, str]] = [128, 128, "M", 256, 256, "M", 512, 512, "M"],
+        vgg_cfg: list[int | str] = [128, 128, "M", 256, 256, "M", 512, 512, "M"],
         batch_norm: bool = True,
         num_classes: int = 10,
     ):
-        super(VGG7_BN, self).__init__()
+        super().__init__()
         self.features = _make_layers(vgg_cfg, batch_norm)
 
         # self.linear1 = nn.Linear(in_features=512, out_features=1024, bias=True)

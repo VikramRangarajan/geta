@@ -1,10 +1,8 @@
 # Copyright (c) 2024, Tri Dao, Albert Gu.
-from typing import Optional
 
 import torch
-from torch import nn, Tensor
-
 from mamba_ssm.ops.triton.layer_norm import RMSNorm, layer_norm_fn
+from torch import Tensor, nn
 
 
 class Block(nn.Module):
@@ -48,7 +46,7 @@ class Block(nn.Module):
     def forward(
         self,
         hidden_states: Tensor,
-        residual: Optional[Tensor] = None,
+        residual: Tensor | None = None,
         inference_params=None,
         **mixer_kwargs,
     ):

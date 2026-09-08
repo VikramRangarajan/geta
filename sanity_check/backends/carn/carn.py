@@ -1,11 +1,12 @@
 import torch
-import torch.nn as nn
-from .ops import ResidualBlock, BasicBlock, MeanShift, UpsampleBlock
+from torch import nn
+
+from .ops import BasicBlock, MeanShift, ResidualBlock, UpsampleBlock
 
 
 class Block(nn.Module):
     def __init__(self, in_channels, out_channels, group=1):
-        super(Block, self).__init__()
+        super().__init__()
 
         self.b1 = ResidualBlock(64, 64)
         self.b2 = ResidualBlock(64, 64)
@@ -34,7 +35,7 @@ class Block(nn.Module):
 
 class CarnNet(nn.Module):
     def __init__(self, **kwargs):
-        super(CarnNet, self).__init__()
+        super().__init__()
 
         scale = kwargs.get("scale")
         multi_scale = kwargs.get("multi_scale")

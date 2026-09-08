@@ -5,13 +5,14 @@ https://huggingface.co/timm/swin_tiny_patch4_window7_224.ms_in1k
 Hotfix: Need to comment out line 186 of the pruning_dependency.py file
 """
 
-import torch
-import torch.nn as nn
-from only_train_once import OTO
-import unittest
 import os
-from transformers import ViTConfig
+import unittest
+
+import torch
 from backends.vision_transformer.Swin import swin_tiny_patch4_window7_224
+from torch import nn
+
+from only_train_once import OTO
 from only_train_once.quantization.quant_model import model_to_quantize_model
 
 OUT_DIR = "./cache"

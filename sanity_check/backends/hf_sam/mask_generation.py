@@ -1,6 +1,6 @@
+import requests
 import torch
 from PIL import Image
-import requests
 from transformers import SamModel, SamProcessor
 
 device = "cuda" if torch.cuda.is_available() else "cpu"

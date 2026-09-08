@@ -8,14 +8,15 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any
 
 import torch
-import torch.nn as nn
 from einops import rearrange, repeat
+from torch import nn
 from transformers import PretrainedConfig, PreTrainedModel
 from transformers.activations import ACT2FN
 from transformers.modeling_outputs import CausalLMOutputWithPast
+
 from .configuration_phi import PhiConfig
 
 try:
@@ -53,7 +54,7 @@ class InferenceParams:
 
     batch_size_offset: int = field(default=0, metadata={"help": "Batch size offset."})
 
-    key_value_memory_dict: Dict[str, Any] = field(
+    key_value_memory_dict: dict[str, Any] = field(
         default_factory=dict, metadata={"help": "Key value memory dictionary."}
     )
 
@@ -109,8 +110,8 @@ def _apply_rotary_emb_kv(
     kv: torch.FloatTensor,
     cos: torch.FloatTensor,
     sin: torch.FloatTensor,
-    cos_k: Optional[torch.FloatTensor] = None,
-    sin_k: Optional[torch.FloatTensor] = None,
+    cos_k: torch.FloatTensor | None = None,
+    sin_k: torch.FloatTensor | None = None,
 ) -> torch.FloatTensor:
     _, seqlen, _, _, _ = kv.shape
     _, rotary_dim = cos.shape
@@ -141,8 +142,8 @@ def _apply_rotary_emb_qkv(
     qkv: torch.FloatTensor,
     cos: torch.FloatTensor,
     sin: torch.FloatTensor,
-    cos_k: Optional[torch.FloatTensor] = None,
-    sin_k: Optional[torch.FloatTensor] = None,
+    cos_k: torch.FloatTensor | None = None,
+    sin_k: torch.FloatTensor | None = None,
 ) -> torch.FloatTensor:
     _, seqlen, _, _, _ = qkv.shape
     _, rotary_dim = cos.shape
@@ -186,10 +187,10 @@ class RotaryEmbedding(nn.Module):
         self,
         dim: int,
         base: int = 10000,
-        scale_base: Optional[float] = None,
+        scale_base: float | None = None,
         pos_idx_in_fp32: bool = True,
         max_position_embeddings: int = 2048,
-        device: Optional[str] = None,
+        device: str | None = None,
         **kwargs,
     ) -> None:
         super().__init__()
@@ -222,7 +223,7 @@ class RotaryEmbedding(nn.Module):
             max_position_embeddings, device=device, dtype=torch.float32
         )
 
-    def _compute_inv_freq(self, device: Optional[str] = None) -> torch.FloatTensor:
+    def _compute_inv_freq(self, device: str | None = None) -> torch.FloatTensor:
         return 1.0 / (
             self.base
             ** (
@@ -234,8 +235,8 @@ class RotaryEmbedding(nn.Module):
     def _update_cos_sin_cache(
         self,
         seqlen: int,
-        device: Optional[str] = None,
-        dtype: Optional[torch.dtype] = None,
+        device: str | None = None,
+        dtype: torch.dtype | None = None,
     ) -> None:
         self._seq_len_cached = seqlen
 
@@ -272,10 +273,10 @@ class RotaryEmbedding(nn.Module):
     def forward(
         self,
         qkv: torch.Tensor,
-        kv: Optional[torch.Tensor] = None,
+        kv: torch.Tensor | None = None,
         seqlen_offset: int = 0,
         **kwargs,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         if (
             self._seq_len_cached < qkv.shape[1] + seqlen_offset
             or self._cos_cached.device != qkv.device
@@ -317,8 +318,8 @@ class PhiMLP(nn.Module):
     def __init__(
         self,
         config: PretrainedConfig,
-        n_inner: Optional[int] = None,
-        act_fn: Optional[str] = None,
+        n_inner: int | None = None,
+        act_fn: str | None = None,
     ) -> None:
         super().__init__()
 
@@ -348,7 +349,7 @@ class PhiSelfAttention(nn.Module):
     def __init__(
         self,
         causal: bool = True,
-        softmax_scale: Optional[float] = None,
+        softmax_scale: float | None = None,
         attention_dropout: float = 0.0,
     ) -> None:
         super().__init__()
@@ -363,7 +364,7 @@ class PhiSelfAttention(nn.Module):
         self,
         qkv: torch.FloatTensor,
         causal: bool = None,
-        key_padding_mask: Optional[torch.BoolTensor] = None,
+        key_padding_mask: torch.BoolTensor | None = None,
         **kwargs,
     ) -> torch.FloatTensor:
         batch_size, seqlen = qkv.shape[0], qkv.shape[1]
@@ -410,7 +411,7 @@ class PhiCrossAttention(nn.Module):
     def __init__(
         self,
         causal: bool = True,
-        softmax_scale: Optional[float] = None,
+        softmax_scale: float | None = None,
         attention_dropout: float = 0.0,
     ) -> None:
         super().__init__()
@@ -426,7 +427,7 @@ class PhiCrossAttention(nn.Module):
         q: torch.FloatTensor,
         kv: torch.FloatTensor,
         causal: bool = None,
-        key_padding_mask: Optional[torch.BoolTensor] = None,
+        key_padding_mask: torch.BoolTensor | None = None,
         **kwargs,
     ) -> torch.FloatTensor:
         batch_size, seqlen_q = q.shape[0], q.shape[1]
@@ -476,10 +477,10 @@ class PhiCrossAttention(nn.Module):
 
 def _find_mha_dims(
     config: PretrainedConfig,
-    n_head: Optional[int] = None,
-    n_head_kv: Optional[int] = None,
-    head_dim: Optional[int] = None,
-) -> Tuple[int, int]:
+    n_head: int | None = None,
+    n_head_kv: int | None = None,
+    head_dim: int | None = None,
+) -> tuple[int, int]:
     if n_head is None and head_dim is None:
         head_dim = config.n_embd // config.n_head
         n_head = config.n_head
@@ -537,18 +538,18 @@ class PhiMHA(nn.Module):
     def __init__(
         self,
         config: PretrainedConfig,
-        dtype: Optional[torch.dtype] = None,
-        device: Optional[str] = None,
-        rotary_dim: Optional[int] = None,
+        dtype: torch.dtype | None = None,
+        device: str | None = None,
+        rotary_dim: int | None = None,
         rotary_base: float = 10000.0,
-        rotary_scale_base: Optional[float] = None,
-        n_head: Optional[int] = None,
-        n_head_kv: Optional[int] = None,
-        head_dim: Optional[int] = None,
+        rotary_scale_base: float | None = None,
+        n_head: int | None = None,
+        n_head_kv: int | None = None,
+        head_dim: int | None = None,
         bias: bool = True,
         causal: bool = True,
-        softmax_scale: Optional[float] = None,
-        layer_idx: Optional[int] = None,
+        softmax_scale: float | None = None,
+        layer_idx: int | None = None,
         return_residual: bool = False,
         checkpointing: bool = False,
     ) -> None:
@@ -621,7 +622,7 @@ class PhiMHA(nn.Module):
         self.checkpointing = checkpointing
 
     def _forward_self_attn(
-        self, x: torch.FloatTensor, key_padding_mask: Optional[torch.BoolTensor]
+        self, x: torch.FloatTensor, key_padding_mask: torch.BoolTensor | None
     ) -> torch.FloatTensor:
         qkv = self.Wqkv(x)
         qkv = rearrange(
@@ -668,8 +669,8 @@ class PhiMHA(nn.Module):
     def _forward_cross_attn(
         self,
         x: torch.FloatTensor,
-        past_key_values: Optional[InferenceParams],
-        key_padding_mask: Optional[torch.BoolTensor],
+        past_key_values: InferenceParams | None,
+        key_padding_mask: torch.BoolTensor | None,
     ) -> torch.FloatTensor:
         batch_size = x.shape[0]
 
@@ -757,10 +758,10 @@ class PhiMHA(nn.Module):
     def forward(
         self,
         x: torch.FloatTensor,
-        past_key_values: Optional[InferenceParams] = None,
-        attention_mask: Optional[Union[torch.LongTensor, torch.BoolTensor]] = None,
+        past_key_values: InferenceParams | None = None,
+        attention_mask: torch.LongTensor | torch.BoolTensor | None = None,
         **kwargs,
-    ) -> Tuple[torch.FloatTensor, torch.FloatTensor]:
+    ) -> tuple[torch.FloatTensor, torch.FloatTensor]:
         if attention_mask is not None:
             attention_mask = attention_mask.bool()
         else:
@@ -797,7 +798,7 @@ class ParallelBlock(nn.Module):
     def __init__(
         self,
         config: PretrainedConfig,
-        block_idx: Optional[int] = None,
+        block_idx: int | None = None,
     ) -> None:
         super().__init__()
 
@@ -811,8 +812,8 @@ class ParallelBlock(nn.Module):
     def forward(
         self,
         hidden_states: torch.FloatTensor,
-        past_key_values: Optional[Union[torch.FloatTensor, InferenceParams]] = None,
-        attention_mask: Optional[torch.BoolTensor] = None,
+        past_key_values: torch.FloatTensor | InferenceParams | None = None,
+        attention_mask: torch.BoolTensor | None = None,
         **kwargs,
     ) -> torch.FloatTensor:
         residual = hidden_states
@@ -907,10 +908,10 @@ class PhiPreTrainedModel(PreTrainedModel):
     def prepare_inputs_for_generation(
         self,
         input_ids: torch.LongTensor,
-        past_key_values: Optional[Union[torch.FloatTensor, InferenceParams]] = None,
-        attention_mask: Optional[Union[torch.LongTensor, torch.BoolTensor]] = None,
+        past_key_values: torch.FloatTensor | InferenceParams | None = None,
+        attention_mask: torch.LongTensor | torch.BoolTensor | None = None,
         **kwargs,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         if past_key_values is None or not (
             isinstance(past_key_values, InferenceParams)
         ):
@@ -959,8 +960,8 @@ class PhiModel(PhiPreTrainedModel):
     def forward(
         self,
         input_ids: torch.LongTensor,
-        past_key_values: Optional[Union[torch.FloatTensor, InferenceParams]] = None,
-        attention_mask: Optional[torch.BoolTensor] = None,
+        past_key_values: torch.FloatTensor | InferenceParams | None = None,
+        attention_mask: torch.BoolTensor | None = None,
     ) -> torch.FloatTensor:
         hidden_states = self.embd(input_ids)
 
@@ -1000,9 +1001,9 @@ class PhiForCausalLM(PhiPreTrainedModel):
     def forward(
         self,
         input_ids: torch.LongTensor,
-        past_key_values: Optional[Union[torch.FloatTensor, InferenceParams]] = None,
-        attention_mask: Optional[torch.BoolTensor] = None,
-        labels: Optional[torch.LongTensor] = None,
+        past_key_values: torch.FloatTensor | InferenceParams | None = None,
+        attention_mask: torch.BoolTensor | None = None,
+        labels: torch.LongTensor | None = None,
         **kwargs,
     ) -> CausalLMOutputWithPast:
         hidden_states = self.transformer(

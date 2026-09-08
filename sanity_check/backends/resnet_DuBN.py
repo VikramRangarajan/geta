@@ -5,15 +5,15 @@ https://github.com/TAMU-VITA/ATMC/blob/master/cifar/resnet/resnet.py
 """
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
+from torch import nn
 
 BN_choices = ["M", "A"]
 
 
 class DualBatchNorm2d(nn.Module):
     def __init__(self, num_features):
-        super(DualBatchNorm2d, self).__init__()
+        super().__init__()
         self.bn = nn.ModuleList(
             [nn.BatchNorm2d(num_features), nn.BatchNorm2d(num_features)]
         )
@@ -44,7 +44,7 @@ class DualBatchNorm2d(nn.Module):
 
 class BasicBlock_DuBN(nn.Module):
     def __init__(self, in_planes, mid_planes, out_planes, stride=1):
-        super(BasicBlock_DuBN, self).__init__()
+        super().__init__()
         self.conv1 = nn.Conv2d(
             in_planes, mid_planes, kernel_size=3, stride=stride, padding=1, bias=False
         )
@@ -75,7 +75,7 @@ class BasicBlock_DuBN(nn.Module):
 
 class ResNet_DuBN(nn.Module):
     def __init__(self, block, num_blocks, num_classes=10, init_stride=1):
-        super(ResNet_DuBN, self).__init__()
+        super().__init__()
         self.in_planes = 64
 
         self.conv1 = nn.Conv2d(

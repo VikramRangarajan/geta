@@ -18,26 +18,26 @@ Modifications and additions for timm hacked together by / Copyright 2021, Ross W
 # --------------------------------------------------------
 import logging
 import math
-from typing import Callable, List, Optional, Tuple, Union
+from collections.abc import Callable
+from typing import Union
 
 import torch
-import torch.nn as nn
-
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import (
-    PatchEmbed,
-    Mlp,
-    DropPath,
     ClassifierHead,
+    DropPath,
+    Mlp,
+    PatchEmbed,
+    ndgrid,
+    resample_patch_embed,
+    resize_rel_pos_bias_table,
     to_2tuple,
     to_ntuple,
     trunc_normal_,
-    _assert,
     use_fused_attn,
-    resize_rel_pos_bias_table,
-    resample_patch_embed,
-    ndgrid,
 )
+from torch import nn
+
 from ._builder import build_model_with_cfg
 from ._features import feature_take_indices
 from ._features_fx import register_notrace_function
@@ -53,12 +53,12 @@ __all__ = ["SwinTransformer"]  # model_registry will add each entrypoint fn to t
 
 _logger = logging.getLogger(__name__)
 
-_int_or_tuple_2_t = Union[int, Tuple[int, int]]
+_int_or_tuple_2_t = Union[int, tuple[int, int]]
 
 
 def window_partition(
     x: torch.Tensor,
-    window_size: Tuple[int, int],
+    window_size: tuple[int, int],
 ) -> torch.Tensor:
     """
     Partition into non-overlapping windows with padding if needed.
@@ -83,7 +83,7 @@ def window_partition(
 
 
 @register_notrace_function  # reason: int argument is a Proxy
-def window_reverse(windows, window_size: Tuple[int, int], H: int, W: int):
+def window_reverse(windows, window_size: tuple[int, int], H: int, W: int):
     """
     Args:
         windows: (num_windows*B, window_size, window_size, C)
@@ -127,7 +127,7 @@ class WindowAttention(nn.Module):
         self,
         dim: int,
         num_heads: int,
-        head_dim: Optional[int] = None,
+        head_dim: int | None = None,
         window_size: _int_or_tuple_2_t = 7,
         qkv_bias: bool = True,
         attn_drop: float = 0.0,
@@ -176,7 +176,7 @@ class WindowAttention(nn.Module):
         trunc_normal_(self.relative_position_bias_table, std=0.02)
         self.softmax = nn.Softmax(dim=-1)
 
-    def set_window_size(self, window_size: Tuple[int, int]) -> None:
+    def set_window_size(self, window_size: tuple[int, int]) -> None:
         """Update window size & interpolate position embeddings
         Args:
             window_size (int): New window size
@@ -211,7 +211,7 @@ class WindowAttention(nn.Module):
         ).contiguous()  # nH, Wh*Ww, Wh*Ww
         return relative_position_bias.unsqueeze(0)
 
-    def forward(self, x, mask: Optional[torch.Tensor] = None):
+    def forward(self, x, mask: torch.Tensor | None = None):
         """
         Args:
             x: input features with shape of (num_windows*B, N, C)
@@ -264,7 +264,7 @@ class SwinTransformerBlock(nn.Module):
         dim: int,
         input_resolution: _int_or_tuple_2_t,
         num_heads: int = 4,
-        head_dim: Optional[int] = None,
+        head_dim: int | None = None,
         window_size: _int_or_tuple_2_t = 7,
         shift_size: int = 0,
         always_partition: bool = False,
@@ -333,7 +333,7 @@ class SwinTransformerBlock(nn.Module):
             persistent=False,
         )
 
-    def get_attn_mask(self, x: Optional[torch.Tensor] = None) -> Optional[torch.Tensor]:
+    def get_attn_mask(self, x: torch.Tensor | None = None) -> torch.Tensor | None:
         if any(self.shift_size):
             # calculate attention mask for SW-MSA
             if x is not None:
@@ -366,17 +366,17 @@ class SwinTransformerBlock(nn.Module):
             mask_windows = mask_windows.view(-1, self.window_area)
             attn_mask = mask_windows.unsqueeze(1) - mask_windows.unsqueeze(2)
             attn_mask = attn_mask.masked_fill(
-                attn_mask != 0, float(-100.0)
-            ).masked_fill(attn_mask == 0, float(0.0))
+                attn_mask != 0, (-100.0)
+            ).masked_fill(attn_mask == 0, 0.0)
         else:
             attn_mask = None
         return attn_mask
 
     def _calc_window_shift(
         self,
-        target_window_size: Union[int, Tuple[int, int]],
-        target_shift_size: Optional[Union[int, Tuple[int, int]]] = None,
-    ) -> Tuple[Tuple[int, int], Tuple[int, int]]:
+        target_window_size: int | tuple[int, int],
+        target_shift_size: int | tuple[int, int] | None = None,
+    ) -> tuple[tuple[int, int], tuple[int, int]]:
         target_window_size = to_2tuple(target_window_size)
         if target_shift_size is None:
             # if passed value is None, recalculate from default window_size // 2 if it was previously non-zero
@@ -393,7 +393,7 @@ class SwinTransformerBlock(nn.Module):
             return target_window_size, target_shift_size
 
         window_size = [
-            r if r <= w else w
+            min(r, w)
             for r, w in zip(self.input_resolution, target_window_size)
         ]
         shift_size = [
@@ -404,9 +404,9 @@ class SwinTransformerBlock(nn.Module):
 
     def set_input_size(
         self,
-        feat_size: Tuple[int, int],
-        window_size: Tuple[int, int],
-        always_partition: Optional[bool] = None,
+        feat_size: tuple[int, int],
+        window_size: tuple[int, int],
+        always_partition: bool | None = None,
     ):
         """
         Args:
@@ -490,7 +490,7 @@ class PatchMerging(nn.Module):
     def __init__(
         self,
         dim: int,
-        out_dim: Optional[int] = None,
+        out_dim: int | None = None,
         norm_layer: Callable = nn.LayerNorm,
     ):
         """
@@ -525,11 +525,11 @@ class SwinTransformerStage(nn.Module):
         self,
         dim: int,
         out_dim: int,
-        input_resolution: Tuple[int, int],
+        input_resolution: tuple[int, int],
         depth: int,
         downsample: bool = True,
         num_heads: int = 4,
-        head_dim: Optional[int] = None,
+        head_dim: int | None = None,
         window_size: _int_or_tuple_2_t = 7,
         always_partition: bool = False,
         dynamic_mask: bool = False,
@@ -537,7 +537,7 @@ class SwinTransformerStage(nn.Module):
         qkv_bias: bool = True,
         proj_drop: float = 0.0,
         attn_drop: float = 0.0,
-        drop_path: Union[List[float], float] = 0.0,
+        drop_path: list[float] | float = 0.0,
         norm_layer: Callable = nn.LayerNorm,
     ):
         """
@@ -606,9 +606,9 @@ class SwinTransformerStage(nn.Module):
 
     def set_input_size(
         self,
-        feat_size: Tuple[int, int],
+        feat_size: tuple[int, int],
         window_size: int,
-        always_partition: Optional[bool] = None,
+        always_partition: bool | None = None,
     ):
         """Updates the resolution, window size and so the pair-wise relative positions.
 
@@ -654,9 +654,9 @@ class SwinTransformer(nn.Module):
         num_classes: int = 1000,
         global_pool: str = "avg",
         embed_dim: int = 96,
-        depths: Tuple[int, ...] = (2, 2, 6, 2),
-        num_heads: Tuple[int, ...] = (3, 6, 12, 24),
-        head_dim: Optional[int] = None,
+        depths: tuple[int, ...] = (2, 2, 6, 2),
+        num_heads: tuple[int, ...] = (3, 6, 12, 24),
+        head_dim: int | None = None,
         window_size: _int_or_tuple_2_t = 7,
         always_partition: bool = False,
         strict_img_size: bool = True,
@@ -667,7 +667,7 @@ class SwinTransformer(nn.Module):
         attn_drop_rate: float = 0.0,
         drop_path_rate: float = 0.1,
         embed_layer: Callable = PatchEmbed,
-        norm_layer: Union[str, Callable] = nn.LayerNorm,
+        norm_layer: str | Callable = nn.LayerNorm,
         weight_init: str = "",
         **kwargs,
     ):
@@ -792,11 +792,11 @@ class SwinTransformer(nn.Module):
 
     def set_input_size(
         self,
-        img_size: Optional[Tuple[int, int]] = None,
-        patch_size: Optional[Tuple[int, int]] = None,
-        window_size: Optional[Tuple[int, int]] = None,
+        img_size: tuple[int, int] | None = None,
+        patch_size: tuple[int, int] | None = None,
+        window_size: tuple[int, int] | None = None,
         window_ratio: int = 8,
-        always_partition: Optional[bool] = None,
+        always_partition: bool | None = None,
     ) -> None:
         """Updates the image resolution and window size.
 
@@ -844,19 +844,19 @@ class SwinTransformer(nn.Module):
     def get_classifier(self) -> nn.Module:
         return self.head.fc
 
-    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+    def reset_classifier(self, num_classes: int, global_pool: str | None = None):
         self.num_classes = num_classes
         self.head.reset(num_classes, pool_type=global_pool)
 
     def forward_intermediates(
         self,
         x: torch.Tensor,
-        indices: Optional[Union[int, List[int]]] = None,
+        indices: int | list[int] | None = None,
         norm: bool = False,
         stop_early: bool = False,
         output_fmt: str = "NCHW",
         intermediates_only: bool = False,
-    ) -> Union[List[torch.Tensor], Tuple[torch.Tensor, List[torch.Tensor]]]:
+    ) -> list[torch.Tensor] | tuple[torch.Tensor, list[torch.Tensor]]:
         """Forward features that returns intermediates.
 
         Args:
@@ -902,7 +902,7 @@ class SwinTransformer(nn.Module):
 
     def prune_intermediate_layers(
         self,
-        indices: Union[int, List[int]] = 1,
+        indices: int | list[int] = 1,
         prune_norm: bool = False,
         prune_head: bool = True,
     ):

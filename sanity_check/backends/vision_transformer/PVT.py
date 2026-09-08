@@ -16,24 +16,24 @@ Modifications and timm support by / Copyright 2022, Ross Wightman
 """
 
 import math
-from typing import Callable, List, Optional, Union
+from collections.abc import Callable
 
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timm.layers import (
     DropPath,
+    LayerNorm,
     to_2tuple,
     to_ntuple,
     trunc_normal_,
-    LayerNorm,
     use_fused_attn,
 )
+from torch import nn
+
 from ._builder import build_model_with_cfg
 from ._manipulate import checkpoint
-from ._registry import register_model, generate_default_cfgs
+from ._registry import generate_default_cfgs, register_model
 
 __all__ = ["PyramidVisionTransformerV2"]
 
@@ -60,7 +60,7 @@ class MlpWithDepthwiseConv(nn.Module):
         self.fc2 = nn.Linear(hidden_features, out_features)
         self.drop = nn.Dropout(drop)
 
-    def forward(self, x, feat_size: List[int]):
+    def forward(self, x, feat_size: list[int]):
         x = self.fc1(x)
         B, N, C = x.shape
         x = x.transpose(1, 2).view(B, C, feat_size[0], feat_size[1])
@@ -119,7 +119,7 @@ class Attention(nn.Module):
             self.norm = nn.LayerNorm(dim)
             self.act = nn.GELU()
 
-    def forward(self, x, feat_size: List[int]):
+    def forward(self, x, feat_size: list[int]):
         B, N, C = x.shape
         H, W = feat_size
         q = self.q(x).reshape(B, N, self.num_heads, -1).permute(0, 2, 1, 3)
@@ -207,7 +207,7 @@ class Block(nn.Module):
         )
         self.drop_path2 = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
 
-    def forward(self, x, feat_size: List[int]):
+    def forward(self, x, feat_size: list[int]):
         x = x + self.drop_path1(self.attn(self.norm1(x), feat_size))
         x = x + self.drop_path2(self.mlp(self.norm2(x), feat_size))
 
@@ -252,7 +252,7 @@ class PyramidVisionTransformerStage(nn.Module):
         qkv_bias: bool = True,
         proj_drop: float = 0.0,
         attn_drop: float = 0.0,
-        drop_path: Union[List[float], float] = 0.0,
+        drop_path: list[float] | float = 0.0,
         norm_layer: Callable = LayerNorm,
     ):
         super().__init__()
@@ -427,7 +427,7 @@ class PyramidVisionTransformerV2(nn.Module):
     def get_classifier(self) -> nn.Module:
         return self.head
 
-    def reset_classifier(self, num_classes: int, global_pool: Optional[str] = None):
+    def reset_classifier(self, num_classes: int, global_pool: str | None = None):
         self.num_classes = num_classes
         if global_pool is not None:
             assert global_pool in ("avg", "")

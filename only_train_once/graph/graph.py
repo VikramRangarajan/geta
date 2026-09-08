@@ -1,13 +1,9 @@
-import math
 import warnings
-from collections import defaultdict, deque
-from typing import Dict, List, Tuple
+from collections import defaultdict
 
 import numpy as np
 import torch
-import torch.nn as nn
 from packaging.version import Version
-from torch import _C
 
 from only_train_once.assets import THEMES
 from only_train_once.operation import (
@@ -19,13 +15,12 @@ from only_train_once.operation import (
 from only_train_once.transform import (
     TensorTransform,
     index_transformation,
-    tensor_transformation,
 )
 from only_train_once.transform.ge import GEParser
 from only_train_once.transform.graph_transform import FRAMEWORK_TRANSFORMS
 
 from .node import Node
-from .node_group import NodeGroup, NodeGroupComposedOp
+from .node_group import NodeGroupComposedOp
 
 if Version(torch.__version__) >= Version("1.13.0"):
     from torch.onnx._globals import GLOBALS
@@ -739,9 +734,7 @@ class Graph:
                     trace_graph, torch.onnx.OperatorExportTypes.ONNX
                 )
             else:
-                raise "Torch {} is not supported because of some bug in _optimize_trace.".format(
-                    torch.__version__
-                )
+                raise f"Torch {torch.__version__} is not supported because of some bug in _optimize_trace."
         return trace_graph
 
     def _get_module_type(self, module):
@@ -870,7 +863,7 @@ class Graph:
 
     def torch_node_id(self, node):
         """Returns a unique ID for a node."""
-        return "node-" + "-".join(["{}".format(o.unique()) for o in node.outputs()])
+        return "node-" + "-".join([f"{o.unique()}" for o in node.outputs()])
 
     def _parse_tensors_info(self, state_dict, torch_graph_str):
         """Use hack to parse tensor info, should be better option for doing it"""
@@ -969,7 +962,7 @@ class Graph:
                         fontsize=self.theme["font_size"],
                         fontname=self.theme["font_name"],
                     )
-                    label = "<tr><td cellpadding='6'>{}</td></tr>".format(node.id)
+                    label = f"<tr><td cellpadding='6'>{node.id}</td></tr>"
                     label = (
                         "<<table border='0' cellborder='0' cellpadding='0'>"
                         + label
@@ -987,7 +980,7 @@ class Graph:
                         fontsize=self.theme["font_size"],
                         fontname=self.theme["font_name"],
                     )
-                    label = "<tr><td cellpadding='6'>{}</td></tr>".format(node.id)
+                    label = f"<tr><td cellpadding='6'>{node.id}</td></tr>"
                     label = (
                         "<<table border='0' cellborder='0' cellpadding='0'>"
                         + label
@@ -1006,9 +999,9 @@ class Graph:
                         fontcolor=self.theme["font_color"],
                         fontname=self.theme["font_name"],
                     )
-                    label = "<tr><td cellpadding='6'>{}</td></tr>".format(node.title)
+                    label = f"<tr><td cellpadding='6'>{node.title}</td></tr>"
                     if node.id:
-                        label += "<tr><td>{}</td></tr>".format(node.id)
+                        label += f"<tr><td>{node.id}</td></tr>"
                     label = (
                         "<<table border='0' cellborder='0' cellpadding='0'>"
                         + label
@@ -1052,7 +1045,7 @@ class Graph:
                         fontcolor=self.theme["font_color"],
                         fontname=self.theme["font_name"],
                     )
-                    label = "<tr><td cellpadding='6'>{}</td></tr>".format(node.id)
+                    label = f"<tr><td cellpadding='6'>{node.id}</td></tr>"
                     label = (
                         "<<table border='0' cellborder='0' cellpadding='0'>"
                         + label
@@ -1071,7 +1064,7 @@ class Graph:
                         fontcolor=self.theme["font_color"],
                         fontname=self.theme["font_name"],
                     )
-                    label = "<tr><td cellpadding='6'>{}</td></tr>".format(node.id)
+                    label = f"<tr><td cellpadding='6'>{node.id}</td></tr>"
                     label = (
                         "<<table border='0' cellborder='0' cellpadding='0'>"
                         + label
@@ -1119,9 +1112,9 @@ class Graph:
                             fontname=self.theme["font_name"],
                         )
 
-                    label = "<tr><td cellpadding='6'>{}</td></tr>".format(node.title)
+                    label = f"<tr><td cellpadding='6'>{node.title}</td></tr>"
                     if node.id:
-                        label += "<tr><td>{}</td></tr>".format(node.id)
+                        label += f"<tr><td>{node.id}</td></tr>"
                     if len(node.param_names) > 0 and display_params:
                         for p_name in node.param_names:
                             label += "<tr><td>{}-{}</td></tr>".format(
@@ -1186,7 +1179,7 @@ class Graph:
                 0,
             )
             zero_group_idxes = np.random.choice(
-                list(range(0, num_groups)), num_zero_groups, replace=False
+                list(range(num_groups)), num_zero_groups, replace=False
             )
             zero_group_idxes.sort()
 
@@ -1398,7 +1391,7 @@ class Graph:
         return flops_break_down
 
     def print_layer_breakdown(
-        self, macs_info: Dict[str, List[Dict]], bops_info: Dict[str, List[Dict]]
+        self, macs_info: dict[str, list[dict]], bops_info: dict[str, list[dict]]
     ) -> None:
         """
         Print the layer-by-layer breakdown of MACs and BOPs.

@@ -2,28 +2,27 @@ import collections.abc
 import math
 import re
 from collections import defaultdict
+from collections.abc import Callable, Iterator
 from itertools import chain
-from typing import Any, Callable, Dict, Iterator, Optional, Tuple, Type, Union
+from typing import Any
 
 import torch
 import torch.utils.checkpoint
+from timm.layers import use_reentrant_ckpt
 from torch import nn as nn
 
-from timm.layers import use_reentrant_ckpt
-
-
 __all__ = [
+    "adapt_input_conv",
+    "checkpoint",
+    "checkpoint_seq",
+    "flatten_modules",
+    "group_modules",
+    "group_parameters",
+    "group_with_matcher",
     "model_parameters",
     "named_apply",
     "named_modules",
     "named_modules_with_params",
-    "adapt_input_conv",
-    "group_with_matcher",
-    "group_modules",
-    "group_parameters",
-    "flatten_modules",
-    "checkpoint_seq",
-    "checkpoint",
 ]
 
 
@@ -102,8 +101,8 @@ MATCH_PREV_GROUP = (99999,)
 
 
 def group_with_matcher(
-    named_objects: Iterator[Tuple[str, Any]],
-    group_matcher: Union[Dict, Callable],
+    named_objects: Iterator[tuple[str, Any]],
+    group_matcher: dict | Callable,
     return_values: bool = False,
     reverse: bool = False,
 ):
@@ -193,10 +192,10 @@ def group_modules(
 
 
 def flatten_modules(
-    named_modules: Iterator[Tuple[str, nn.Module]],
+    named_modules: Iterator[tuple[str, nn.Module]],
     depth: int = 1,
-    prefix: Union[str, Tuple[str, ...]] = "",
-    module_types: Union[str, Tuple[Type[nn.Module]]] = "sequential",
+    prefix: str | tuple[str, ...] = "",
+    module_types: str | tuple[type[nn.Module]] = "sequential",
 ):
     prefix_is_tuple = isinstance(prefix, tuple)
     if isinstance(module_types, str):
@@ -225,7 +224,7 @@ def flatten_modules(
 def checkpoint(
     function,
     *args,
-    use_reentrant: Optional[bool] = None,
+    use_reentrant: bool | None = None,
     **kwargs,
 ):
     """checkpoint wrapper fn
@@ -250,7 +249,7 @@ def checkpoint_seq(
     every: int = 1,
     flatten: bool = False,
     skip_last: bool = False,
-    use_reentrant: Optional[bool] = None,
+    use_reentrant: bool | None = None,
 ):
     r"""A helper function for checkpointing sequential models.
 

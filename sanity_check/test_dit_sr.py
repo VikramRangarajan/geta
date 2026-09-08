@@ -1,9 +1,10 @@
-import torch
-from only_train_once import OTO
-from only_train_once.dependency_graph.pruning_dependency import post_process_chunk_node
-from backends import DiffIRS3SNPE
-import unittest
 import os
+import unittest
+
+import torch
+from backends import DiffIRS3SNPE
+
+from only_train_once import OTO
 
 OUT_DIR = "./cache"
 
@@ -95,7 +96,6 @@ class TestDITSRUpPath(unittest.TestCase):
             "GBs",
         )
 
-        return
 
 
 class TestDITSRDownPath(unittest.TestCase):
@@ -173,7 +173,6 @@ class TestDITSRDownPath(unittest.TestCase):
             "GBs",
         )
 
-        return
 
 
 class TestDITSR(unittest.TestCase):
@@ -228,4 +227,3 @@ class TestDITSR(unittest.TestCase):
             compressed_model_size.st_size / (1024**3),
             "GBs",
         )
-        return

@@ -1,12 +1,11 @@
-import torch.nn as nn
-import torch
+from torch import nn
 
 AFFINE = True
 
 
 class DemoNetConvtransposeInCase1(nn.Module):
     def __init__(self):
-        super(DemoNetConvtransposeInCase1, self).__init__()
+        super().__init__()
         self.conv1 = nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
         self.bn_1 = nn.InstanceNorm2d(64, affine=AFFINE)
         self.bn_2 = nn.InstanceNorm2d(64, affine=AFFINE)

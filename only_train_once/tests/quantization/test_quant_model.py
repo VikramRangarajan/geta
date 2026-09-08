@@ -1,22 +1,18 @@
 import pytest
 import torch
-import torch.nn as nn
 import torchvision
+from conftest import compare_outputs
+from torch import nn
 
 from only_train_once.quantization.quant_layers import (
     QuantizationMode,
     QuantizationType,
-    QuantizeConv2d,
-    QuantizeLinear,
 )
 from only_train_once.quantization.quant_model import (
     get_bitwidth_dict,
     get_quant_param_dict,
     model_to_quantize_model,
 )
-
-
-from conftest import compare_outputs
 
 
 @pytest.fixture

@@ -7,7 +7,6 @@ import json
 import logging
 import math
 import os
-import sys
 import warnings
 
 from .geta_common import (
@@ -20,30 +19,25 @@ from .geta_common import (
 
 bootstrap_paths()
 
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-import torchvision.transforms as transforms
+from torch import nn
 
 # from PIL import Image
-from torch.utils.data import DataLoader, IterableDataset
+from torch.utils.data import DataLoader
+from torchvision import transforms
 from torchvision.datasets import CIFAR10
 from tqdm import tqdm
 
 # from transformers import AutoImageProcessor
-
 from only_train_once import OTO
 from only_train_once.quantization.quant_model import model_to_quantize_model
-from sanity_check.backends.vgg7 import vgg7_bn
-from sanity_check.backends.resnet20_cifar10 import resnet56_cifar10
 from sanity_check.backends.simple_vit import simpleViT_cifar10
 from sanity_check.backends.vision_transformer.vision_transformer import (
     vit_base_patch16_384,
     vit_small_patch16_224,
 )
-
 
 # Ignore warnings
 warnings.filterwarnings("ignore")
@@ -239,7 +233,7 @@ def main(config):
     logger.info(f"Start pruning step: {pruning_start_step:^3d}")
     logger.info(f"Pruning steps: {pruning_steps:^3d}")
     logger.info(f"Learning rate scheduler steps: {lr_step:^3d}")
-    logger.info(f"=======================================")
+    logger.info("=======================================")
 
     torch.manual_seed(seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

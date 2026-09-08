@@ -1,17 +1,16 @@
 # https://github.com/kentaroy47/vision-transformers-cifar10/tree/main
 
-import torch
-import torch.nn as nn
-from only_train_once import OTO
-import unittest
 import os
-from backends.hf_vit.modeling_vit import ViTForImageClassification
+import unittest
+
+import torch
 from backends.vision_transformer.vision_transformer import (
-    vit_base_patch16_384,
     vit_small_patch16_224,
 )
-from only_train_once.quantization.quant_model import model_to_quantize_model
+from torch import nn
 
+from only_train_once import OTO
+from only_train_once.quantization.quant_model import model_to_quantize_model
 
 OUT_DIR = "./cache"
 

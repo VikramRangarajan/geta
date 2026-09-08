@@ -1,6 +1,6 @@
-import torch.nn as nn
-from torch.nn.utils.spectral_norm import spectral_norm as SpectralNorm
 import torch
+from torch import nn
+from torch.nn.utils.spectral_norm import spectral_norm as SpectralNorm
 
 
 def spectral_norm(module, use_spect=True):
@@ -23,7 +23,7 @@ class DemonetBatchnormPruning(nn.Module):
         use_spect,
         size=256,
     ):
-        super(DemonetBatchnormPruning, self).__init__()
+        super().__init__()
 
         if size == 512:
             self.input_layer = nn.Sequential(
@@ -107,7 +107,7 @@ class ResBlock(nn.Module):
         nonlinearity=nn.LeakyReLU(),
         use_spect=False,
     ):
-        super(ResBlock, self).__init__()
+        super().__init__()
         # Attributes
         self.actvn = nonlinearity
         hidden_nc = min(input_nc, output_nc) if hidden_nc is None else hidden_nc

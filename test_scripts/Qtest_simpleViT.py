@@ -7,39 +7,34 @@ import json
 import logging
 import math
 import os
-import sys
 import warnings
+
+import numpy as np
+import torch
+import torch.nn.functional as F
+from torch import nn
+
+# from PIL import Image
+from torch.utils.data import DataLoader
+from torchvision import transforms
+from torchvision.datasets import CIFAR10
+from tqdm import tqdm
+
+# from transformers import AutoImageProcessor
+from only_train_once import OTO
+from only_train_once.optimizer.utils import (
+    load_checkpoint,
+    save_checkpoint,
+    scan_checkpoint,
+)
+from only_train_once.quantization.quant_model import model_to_quantize_model
+from sanity_check.backends.simple_vit import simpleViT_cifar10
 
 from .geta_common import (
     add_common_args,
     check_accuracy,
     resolve_data_dir,
     resolve_output_dir,
-)
-
-import matplotlib.pyplot as plt
-import numpy as np
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torchvision.transforms as transforms
-
-# from PIL import Image
-from torch.utils.data import DataLoader, IterableDataset
-from torchvision.datasets import CIFAR10
-from tqdm import tqdm
-
-# from transformers import AutoImageProcessor
-
-from only_train_once import OTO
-from only_train_once.quantization.quant_model import model_to_quantize_model
-from sanity_check.backends.vgg7 import vgg7_bn
-from sanity_check.backends.resnet20_cifar10 import resnet56_cifar10
-from sanity_check.backends.simple_vit import simpleViT_cifar10
-from only_train_once.optimizer.utils import (
-    save_checkpoint,
-    load_checkpoint,
-    scan_checkpoint,
 )
 
 # Ignore warnings
@@ -231,7 +226,7 @@ def main(config):
     logger.info(f"Start pruning step: {pruning_start_step:^3d}")
     logger.info(f"Pruning steps: {pruning_steps:^3d}")
     logger.info(f"Learning rate scheduler steps: {lr_step:^3d}")
-    logger.info(f"=======================================")
+    logger.info("=======================================")
 
     torch.manual_seed(seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

@@ -1,8 +1,9 @@
-import math
-import torch
-import torch.nn as nn
-import yaml
 import argparse
+import math
+
+import torch
+import yaml
+from torch import nn
 
 
 def get_timestep_embedding(timesteps, embedding_dim):

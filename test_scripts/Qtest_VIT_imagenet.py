@@ -7,39 +7,33 @@ import json
 import logging
 import math
 import os
-import sys
 import warnings
 
 from .geta_common import (
     add_common_args,
     bootstrap_paths,
-    resolve_data_dir,
     check_accuracy,
     create_exp_dir,
+    resolve_data_dir,
 )
 
 bootstrap_paths()
 
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
-import torchvision.transforms as transforms
 import torchvision
+from torch import distributed, nn
 
 # from PIL import Image
-from torch.utils.data import DataLoader, IterableDataset
+from torch.utils.data import DataLoader
+from torch.utils.data.distributed import DistributedSampler
+from torchvision import transforms
 from torchvision.datasets import CIFAR10
 from tqdm import tqdm
 
 from only_train_once import OTO
 from only_train_once.quantization.quant_model import model_to_quantize_model
-from sanity_check.backends.vgg7 import vgg7_bn
-from sanity_check.backends.resnet20_cifar10 import resnet56_cifar10
-from sanity_check.backends.simple_vit import simpleViT_cifar10
-from torch.utils.data.distributed import DistributedSampler
-from torch import distributed
 
 # Ignore warnings
 warnings.filterwarnings("ignore")
@@ -305,7 +299,7 @@ def main(config):
     logger.info(f"Start pruning step: {pruning_start_step:^3d}")
     logger.info(f"Pruning steps: {pruning_steps:^3d}")
     logger.info(f"Learning rate scheduler steps: {lr_step:^3d}")
-    logger.info(f"=======================================")
+    logger.info("=======================================")
 
     torch.manual_seed(seed)
     # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -353,9 +347,7 @@ def main(config):
     model = model_to_quantize_model(model, num_bits=init_bit)
     oto = OTO(model.cpu(), dummy_input=dummy_input.cpu())
 
-    if model_name == "vit":
-        oto.mark_unprunable_by_param_names(["patch_embed.proj.weight", "pos_embed"])
-    elif model_name == "deit":
+    if model_name == "vit" or model_name == "deit":
         oto.mark_unprunable_by_param_names(["patch_embed.proj.weight", "pos_embed"])
     elif model_name == "pvt":
         model = None

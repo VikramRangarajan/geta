@@ -1,10 +1,10 @@
 import logging
 import math
 from enum import Enum
-from typing import Tuple, Union
+from typing import Union
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 
 class NanInGradientError(Exception):
@@ -69,7 +69,7 @@ class SymQuantizerNonLinear(torch.autograd.Function):
         return output
 
     @staticmethod
-    def backward(ctx, grad_output) -> Tuple[torch.Tensor]:
+    def backward(ctx, grad_output) -> tuple[torch.Tensor]:
         input, d_quant, q_m, t_quant, clip_val, q_s = ctx.saved_tensors
         device = input.device
         input_abs = torch.abs(input)
@@ -161,7 +161,7 @@ class SymQuantizerLinear(torch.autograd.Function):
         return output
 
     @staticmethod
-    def backward(ctx, grad_output) -> Tuple[torch.Tensor]:
+    def backward(ctx, grad_output) -> tuple[torch.Tensor]:
         input, d_quant, q_m, clip_val, q_s = ctx.saved_tensors
         device = input.device
         input_abs = torch.abs(input)
@@ -247,7 +247,7 @@ class DGEQuantizer(torch.autograd.Function):
         return output
 
     @staticmethod
-    def backward(ctx, grad_output) -> Tuple[torch.Tensor]:
+    def backward(ctx, grad_output) -> tuple[torch.Tensor]:
         input, d_quant, q_m, k, clip_val, q_s = ctx.saved_tensors
         device = input.device
         input_abs = torch.abs(input)
@@ -312,8 +312,8 @@ class QuantizeMixin:
         q_m_init: float = 1.0,
         quant_type: QuantizationType = QuantizationType.SYMMETRIC_LINEAR,
         quant_mode: QuantizationMode = QuantizationMode.WEIGHT_ONLY,
-        weight_clip_val: Tuple[float, float] = (-2.0, 2.0),
-        act_clip_val: Tuple[float, float] = (-2.0, 2.0),
+        weight_clip_val: tuple[float, float] = (-2.0, 2.0),
+        act_clip_val: tuple[float, float] = (-2.0, 2.0),
     ):
         # Initialize weight quantization parameters
         self.d_quant_wt = nn.Parameter(torch.tensor([d_quant_init]))

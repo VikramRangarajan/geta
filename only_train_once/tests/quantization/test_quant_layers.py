@@ -1,11 +1,12 @@
-import pytest
 import torch
-import torch.nn as nn
-
-from only_train_once.quantization.quant_layers import DGEQuantizer
-from only_train_once.quantization.quant_layers import QuantizeConv2d, QuantizeLinear
-
 from conftest import compare_outputs
+from torch import nn
+
+from only_train_once.quantization.quant_layers import (
+    DGEQuantizer,
+    QuantizeConv2d,
+    QuantizeLinear,
+)
 
 
 def test_qlinear_vs_linear_equivalence():

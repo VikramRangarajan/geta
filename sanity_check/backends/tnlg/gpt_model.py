@@ -20,16 +20,17 @@ The classes are implemented as PyTorch nn.Module subclasses, and can be used for
 training and inference on language modeling tasks.
 """
 
+
+import torch
+from torch import nn
+
 from .gpt_components import (
-    SelfAttention,
     ProjLayer,
-    rotary_mat,
     ProjLayerSiluMatMul,
     RMSNorm,
+    SelfAttention,
+    rotary_mat,
 )
-import torch.nn as nn
-import torch
-from typing import Union, Tuple
 
 
 class TransformerLayer(nn.Module):
@@ -58,7 +59,7 @@ class TransformerLayer(nn.Module):
         hidden_size: int,
         n_heads: int,
         scale_type: str,
-        device: Union[torch.device, None] = None,
+        device: torch.device | None = None,
         use_biases: bool = True,
         interleaved: bool = False,
         model_type: str = "TNLG",
@@ -431,9 +432,7 @@ class LanguageModel(nn.Module):
             return self.logits_layer.weight
 
         assert self.embedding_layer is not None
-        if self.model_type == "Llama":
-            return self.embedding_layer.weight
-        elif self.model_type == "Dolly":
+        if self.model_type == "Llama" or self.model_type == "Dolly":
             return self.embedding_layer.weight
         else:
             raise ValueError("model_type must be either TNLG or Llama")
@@ -598,7 +597,7 @@ class TNLG(nn.Module):
         k_cache: torch.Tensor = None,
         v_cache: torch.Tensor = None,
         pos: int = 0,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         if attn_mask is None:
             max_seq_len, n_layers, n_heads, hidden_size, device = (
                 self.max_seq_len,
@@ -751,7 +750,7 @@ class CausalLM(nn.Module):
         k_cache: torch.Tensor = None,
         v_cache: torch.Tensor = None,
         pos: int = 0,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         if attn_mask is None:
             max_seq_len, n_layers, n_heads, hidden_size, device = (
                 self.max_seq_len,

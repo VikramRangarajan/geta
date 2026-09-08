@@ -1,9 +1,11 @@
-import torch
-from only_train_once import OTO
-import unittest
 import os
-import onnxruntime as ort
+import unittest
+
 import numpy as np
+import onnxruntime as ort
+import torch
+
+from only_train_once import OTO
 
 OUT_DIR = "./cache"
 

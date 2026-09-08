@@ -108,7 +108,7 @@ class GETA(BaseHybridSparseOptimizer):
         self.logger.info(f"pruning_periods: {self.pruning_periods}")
         self.logger.info(f"pruning_period_duration: {self.pruning_period_duration}")
 
-        super(GETA, self).__init__(
+        super().__init__(
             params=params,
             variant=variant,
             lr=lr,
@@ -152,7 +152,7 @@ class GETA(BaseHybridSparseOptimizer):
             os.makedirs(os.path.dirname(filename), exist_ok=True)
             file = open(filename, mode)
             yield file
-        except IOError as e:
+        except OSError as e:
             self.logger.error(f"Error opening file {filename}: {e}")
         finally:
             file.close()
@@ -423,29 +423,19 @@ class GETA(BaseHybridSparseOptimizer):
                     with self.safe_open_file(filename) as logfile:
                         logfile.write("Throw an error: cosine_similarity_clip error\n")
                         logfile.write(
-                            "similarity_value: {cos_similar:^8.9e}\n".format(
-                                cos_similar=cosine_similarity_clip.item()
-                            )
+                            f"similarity_value: {cosine_similarity_clip.item():^8.9e}\n"
                         )
                         logfile.write(
-                            "flatten_grad_max: {flatten_grad:^8.9e}\n".format(
-                                flatten_grad=torch.max(flatten_grad).item()
-                            )
+                            f"flatten_grad_max: {torch.max(flatten_grad).item():^8.9e}\n"
                         )
                         logfile.write(
-                            "flatten_clip_max: {flatten_clip:^8.9e}\n".format(
-                                flatten_clip=torch.max(flatten_clip).item()
-                            )
+                            f"flatten_clip_max: {torch.max(flatten_clip).item():^8.9e}\n"
                         )
                         logfile.write(
-                            "flatten_grad_mean: {flatten_grad:^8.9e}\n".format(
-                                flatten_grad=torch.mean(flatten_grad).item()
-                            )
+                            f"flatten_grad_mean: {torch.mean(flatten_grad).item():^8.9e}\n"
                         )
                         logfile.write(
-                            "flatten_clip_mean: {flatten_clip:^8.9e}\n".format(
-                                flatten_clip=torch.mean(flatten_clip).item()
-                            )
+                            f"flatten_clip_mean: {torch.mean(flatten_clip).item():^8.9e}\n"
                         )
                         # logfile.write("all_grad_max: {flatten_grad:^8.9e}\n".format(flatten_grad=torch.max(torch.Tensor(prune_param_grad_list))) )
                     self.logger.error("Error with computing cosine_similarity_clip!")

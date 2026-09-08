@@ -1,8 +1,9 @@
 import unittest
+
 import torch
+from backends import SamModel
 from transformers import SamConfig
 
-from backends import SamModel
 from only_train_once import OTO
 
 OUT_DIR = "./cache"
@@ -32,7 +33,6 @@ class TestSamMaskDecoder(unittest.TestCase):
         oto_decoder.random_set_zero_groups()
         oto_decoder.construct_subnet(out_dir=OUT_DIR)
 
-        return
 
 
 if __name__ == "__main__":
