@@ -415,7 +415,11 @@ class GETA(BaseHybridSparseOptimizer):
                         f"Unexpected cosine_similarity_clip value: {cosine_similarity_clip}"
                     )
                     outID = "log_info_" + str(self.start_pruning_step)
-                    filename = os.path.join("outputs",f"sparsity_{self.target_group_sparsity*100}", f"{outID}.txt")
+                    filename = os.path.join(
+                        "outputs",
+                        f"sparsity_{self.target_group_sparsity * 100}",
+                        f"{outID}.txt",
+                    )
                     with self.safe_open_file(filename) as logfile:
                         logfile.write("Throw an error: cosine_similarity_clip error\n")
                         logfile.write(
@@ -475,7 +479,11 @@ class GETA(BaseHybridSparseOptimizer):
                 d_quant_upper, d_quant
             )  # Avoid quant step size d being too large.
         if self.verbose == "True":
-            filename = os.path.join("outputs",f"sparsity_{self.target_group_sparsity*100}", f"{outID}.txt")
+            filename = os.path.join(
+                "outputs",
+                f"sparsity_{self.target_group_sparsity * 100}",
+                f"{outID}.txt",
+            )
             with self.safe_open_file(filename) as logfile:
                 content = "Step: {num_step:^11s} Layer_name: {name:^30s} clip_max: {clip_max:^8.5e} res_max: {res_max:^8.5e} grad_max: {grad_max:^8.5e} clip_grad: {clip_grad:^8.5e} res_grad: {res_grad:^8.5e} flatten_clip_norm: {flatten_clip_norm:^8.5e} flatten_res_norm: {flatten_res_norm:^8.5e} flatten_grad_norm: {flatten_grad_norm:^8.5e} cos(gamma): {angle_gamma:^8.5e} cos(d):{angle_d:^8.5e} forget_rate: {gamma:^8.5e} d_quant: {d_quant:^8.5e} \n".format(
                     num_step=str(self.num_steps),
@@ -828,16 +836,19 @@ class GETA(BaseHybridSparseOptimizer):
 
     def log_qm_projection(self):
         """Log q_m during projection"""
-        if (self.num_steps >= self.start_projection_step and 
-            self.num_steps <= self.start_projection_step + self.projection_steps and
-            self.num_steps % 1000 == 0):
-            
+        if (
+            self.num_steps >= self.start_projection_step
+            and self.num_steps <= self.start_projection_step + self.projection_steps
+            and self.num_steps % 1000 == 0
+        ):
             log_file = os.path.join(self.log_dir, f"projection_qm_{self.num_steps}.txt")
             with self.safe_open_file(log_file, "w") as f:
-                curr_period = (self.num_steps - self.start_projection_step) // self.projection_period_duration
+                curr_period = (
+                    self.num_steps - self.start_projection_step
+                ) // self.projection_period_duration
                 f.write(f"Step: {self.num_steps}, Projection Period: {curr_period}\n")
                 f.write(f"Current max_bit_wt: {self.max_bit_wt}\n\n")
-                
+
                 for group in self.param_groups:
                     for p_name, p in zip(group["p_names"], group["params"]):
                         if "q_m_wt" in p_name:
@@ -891,7 +902,9 @@ class GETA(BaseHybridSparseOptimizer):
 
         # Second pass to update variables
         if self.pruning_period_duration != 0:
-            t = (self.num_steps - self.start_pruning_step) % self.pruning_period_duration
+            t = (
+                self.num_steps - self.start_pruning_step
+            ) % self.pruning_period_duration
         for group in self.param_groups:
             if not group["is_prunable"] or len(group["active_redundant_idxes"]) == 0:
                 if self.num_steps <= self.start_projection_step:  # First stage
@@ -993,7 +1006,10 @@ class GETA(BaseHybridSparseOptimizer):
             self.fix_pruned_groups_as_zeros(group)
 
         if self.pruning_period_duration != 0:
-            if self.num_steps >= self.start_pruning_step and t == self.pruning_period_duration - 1:
+            if (
+                self.num_steps >= self.start_pruning_step
+                and t == self.pruning_period_duration - 1
+            ):
                 self.commit_redundant_idxes()
 
     def compute_metrics(self):
@@ -1016,7 +1032,9 @@ class GETA(BaseHybridSparseOptimizer):
             for param, p_transform in zip(group["params"], group["p_transform"]):
                 if p_transform == TensorTransform.NO_PRUNE:
                     continue
-                param_transform = tensor_transformation_param_group(param.data, p_transform, group)
+                param_transform = tensor_transformation_param_group(
+                    param.data, p_transform, group
+                )
                 if norm_group == None:
                     norm_group = torch.norm(param_transform, dim=1) ** 2
                 else:
@@ -1045,30 +1063,34 @@ class GETA(BaseHybridSparseOptimizer):
         """
         Return a state_dict of the optimizer for restore.
         """
-        parent_state = super().state_dict() # includes param_gropups, param_data, and optimizer-specific state
+        parent_state = (
+            super().state_dict()
+        )  # includes param_gropups, param_data, and optimizer-specific state
         self.logger.debug(f"Parent state_dict keys: {parent_state.keys()}")
         # Add GETA quantization state
         state_dict = {"param_groups": self.param_groups}
         state_dict.update(parent_state)
-        state_dict.update({
-            'num_steps': self.num_steps,
-            'curr_pruning_period': self.curr_pruning_period, 
-            'start_pruning_step': self.start_pruning_step,
-            'pruning_periods': self.pruning_periods,
-            'pruning_steps': self.pruning_steps,
-            'start_projection_step': self.start_projection_step,
-            'projection_periods': self.projection_periods,
-            'projection_steps': self.projection_steps,
-            'pruning_period_duration': self.pruning_period_duration,
-            'bit_layers': self.bit_layers,
-            'projection_period_duration': self.projection_period_duration,
-            'min_bit_wt': self.min_bit_wt,
-            'max_bit_wt': self.max_bit_wt,
-            'min_bit_act': self.min_bit_act,
-            'max_bit_act': self.max_bit_act,
-            'bit_reduction': self.bit_reduction,
-            'pruned_group_indices': self.pruned_group_idxes,
-        })
+        state_dict.update(
+            {
+                "num_steps": self.num_steps,
+                "curr_pruning_period": self.curr_pruning_period,
+                "start_pruning_step": self.start_pruning_step,
+                "pruning_periods": self.pruning_periods,
+                "pruning_steps": self.pruning_steps,
+                "start_projection_step": self.start_projection_step,
+                "projection_periods": self.projection_periods,
+                "projection_steps": self.projection_steps,
+                "pruning_period_duration": self.pruning_period_duration,
+                "bit_layers": self.bit_layers,
+                "projection_period_duration": self.projection_period_duration,
+                "min_bit_wt": self.min_bit_wt,
+                "max_bit_wt": self.max_bit_wt,
+                "min_bit_act": self.min_bit_act,
+                "max_bit_act": self.max_bit_act,
+                "bit_reduction": self.bit_reduction,
+                "pruned_group_indices": self.pruned_group_idxes,
+            }
+        )
         self.logger.debug(f"Final state_dict keys: {state_dict.keys()}")
         return state_dict
 
@@ -1191,17 +1213,23 @@ class GETA(BaseHybridSparseOptimizer):
                 prev_param_groups = state_dict[attr_name]
                 for param_group in self.param_groups:
                     prev_param_group = next(
-                        (_g for _g in prev_param_groups if param_group["id"] == _g["id"]),
+                        (
+                            _g
+                            for _g in prev_param_groups
+                            if param_group["id"] == _g["id"]
+                        ),
                         None,
                     )
                     if prev_param_group is None:
-                        raise Warning(f"Param group {param_group['id']} not found in previous state_dict.")
+                        raise Warning(
+                            f"Param group {param_group['id']} not found in previous state_dict."
+                        )
                         continue
                     for param_group_attr_name in prev_param_group:
                         if param_group_attr_name == "params":
                             for p_name, param, prev_p_name, prev_param in zip(
                                 param_group["p_names"],
-                                param_group["params"], 
+                                param_group["params"],
                                 prev_param_group["p_names"],
                                 prev_param_group["params"],
                             ):
@@ -1210,7 +1238,9 @@ class GETA(BaseHybridSparseOptimizer):
                                     if prev_param.grad is not None:
                                         param.grad.copy_(prev_param.grad)
                                 else:
-                                    print(f"\tParam {p_name} not found in previous state_dict.")
+                                    print(
+                                        f"\tParam {p_name} not found in previous state_dict."
+                                    )
                         else:
                             param_group[param_group_attr_name] = copy.deepcopy(
                                 prev_param_group[param_group_attr_name]

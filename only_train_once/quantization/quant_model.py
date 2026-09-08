@@ -12,6 +12,7 @@ The model_to_quantize_model supports
     - both linear quantization (no t) and nonlinear quantization (yes t)
 """
 
+
 def model_to_quantize_model(
     model: nn.Module,
     d_quant_init: float = 1e-4,

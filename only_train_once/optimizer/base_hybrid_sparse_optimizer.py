@@ -248,7 +248,7 @@ class BaseHybridSparseOptimizer(BaseOptimizer):
             for param, p_transform in zip(group["params"], group["p_transform"]):
                 if p_transform == TensorTransform.NO_PRUNE:
                     continue
-                '''
+                """
                 param_transform = None
                 if p_transform == TensorTransform.MULTIHEAD_HEADDIM:
                     param_transform = tensor_transformation(param.data, p_transform, group['num_groups'], group['num_heads'])
@@ -264,8 +264,10 @@ class BaseHybridSparseOptimizer(BaseOptimizer):
                             param_transform = tensor_transformation(param_transform, p_transform_type, num_heads)
                 else:
                     param_transform = tensor_transformation(param.data, p_transform, group['num_groups'])
-                '''
-                param_transform = tensor_transformation_param_group(param.data, p_transform, group)
+                """
+                param_transform = tensor_transformation_param_group(
+                    param.data, p_transform, group
+                )
                 if norm_group == None:
                     norm_group = torch.norm(param_transform, dim=1) ** 2
                 else:

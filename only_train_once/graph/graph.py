@@ -93,9 +93,9 @@ class Graph:
         self._model = model
         self.set_param_grad_no_grad(self._model)
 
-        assert (
-            dummy_input is not None
-        ), "Dummy_input args must be provided for Pytorch models."
+        assert dummy_input is not None, (
+            "Dummy_input args must be provided for Pytorch models."
+        )
         model = model.eval()
         self.build(model, dummy_input)
         if len(self.skip_patterns) > 0:
@@ -470,11 +470,11 @@ class Graph:
         for node in self.nodes.values():
             if "onnx::Slice" in node.torch_graph_str:
                 print(node.torch_graph_str)
-                str_info = node.torch_graph_str.split(':')[1].strip()
-                str_info = _get_str_inside_parenthesis(str_info, prefix_str='Float')
+                str_info = node.torch_graph_str.split(":")[1].strip()
+                str_info = _get_str_inside_parenthesis(str_info, prefix_str="Float")
                 if str_info is None:
                     continue
-                str_info = str_info.split(',')
+                str_info = str_info.split(",")
                 output_shapes = []
                 total_num = None
                 is_stride = False
@@ -485,18 +485,17 @@ class Graph:
                     elif num.isdigit() and is_stride:
                         break
                     else:
-                        if num.startswith('strides=['):
-                            total_num = int(num.split('strides=[')[1])
+                        if num.startswith("strides=["):
+                            total_num = int(num.split("strides=[")[1])
                             is_stride = True
                 chunk_size = np.prod(output_shapes)
                 num_chunks = total_num // chunk_size
                 if total_num % chunk_size > 0:
                     continue
-                node.op_name = 'chunk'
-                node.op._type = 'chunk-' + str(num_chunks)
-                node.op.cfg_params['num_chunks'] = num_chunks
-        
-    
+                node.op_name = "chunk"
+                node.op._type = "chunk-" + str(num_chunks)
+                node.op.cfg_params["num_chunks"] = num_chunks
+
     def _post_process_for_transpose(self):
         """Handle KV cache in DNN architectures"""
 
@@ -520,7 +519,6 @@ class Graph:
                     self.add_edge_by_id(node.id, outgoing_node.id)
                 self.remove(matmul_branch_node)
                 outgoing_node.op_name = "gemm"
-
 
     def _post_process_for_quantize_linear(self):
         class QuantizeLinear:
@@ -555,7 +553,7 @@ class Graph:
                 "LlamaAttention",
                 "SimpleViTAttention",
                 "ViTAttention",
-                "PhiMHA"
+                "PhiMHA",
             ] and (
                 len(node.param_names) == 0 or "LayerNorm" not in node.param_names[0]
             ):
@@ -594,7 +592,6 @@ class Graph:
                 for node_group in self.op_name_to_node_group_comp_op.values():
                     if node_group.contain_node(node_to_remove):
                         node_group.remove_node(node_to_remove)
-
 
     def _post_process_for_quantize_conv2d(self):
         class QuantizeConv2d:

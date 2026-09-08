@@ -18,6 +18,7 @@ from only_train_once.quantization.quant_model import (
 
 from conftest import compare_outputs
 
+
 @pytest.fixture
 def base_model():
     return torchvision.models.resnet50(pretrained=True)
@@ -32,7 +33,7 @@ def test_qresnet50_vs_resnet50_equivalence():
     """Test numerical equivalence between quantized and FP32 ResNet50."""
     # Set random seed for reproducibility
     torch.manual_seed(42)
-    
+
     d_quant_init = 1e-5
     t_quant_init = 1.0
     q_m_init = 10.0
@@ -51,6 +52,7 @@ def test_qresnet50_vs_resnet50_equivalence():
     # Fixed input size (224, 224) which is standard for ResNet
     dummy_input = torch.rand(1, 3, 224, 224)
     assert compare_outputs(qresnet50, resnet50, dummy_input, rtol=rtol, atol=atol)
+
 
 def test_model_quantization_basic(base_model, sample_input):
     """Test basic model quantization runs."""
