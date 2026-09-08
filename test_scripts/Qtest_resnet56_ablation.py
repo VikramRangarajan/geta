@@ -31,7 +31,6 @@ from only_train_once.optimizer.utils import (
 from only_train_once.quantization.quant_model import model_to_quantize_model
 from sanity_check.backends.resnet20_cifar10 import resnet20_cifar10, resnet56_cifar10
 from sanity_check.backends.vgg7 import vgg7_bn
-
 from test_scripts.geta_common import (
     add_common_args,
     resolve_data_dir,

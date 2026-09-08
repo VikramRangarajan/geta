@@ -97,7 +97,6 @@ class TestDITSRUpPath(unittest.TestCase):
         )
 
 
-
 class TestDITSRDownPath(unittest.TestCase):
     def test_sanity(self, dummy_input=torch.rand(1, 3, 224, 224)):
 
@@ -172,7 +171,6 @@ class TestDITSRDownPath(unittest.TestCase):
             compressed_model_size.st_size / (1024**3),
             "GBs",
         )
-
 
 
 class TestDITSR(unittest.TestCase):

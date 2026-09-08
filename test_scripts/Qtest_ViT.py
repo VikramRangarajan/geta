@@ -9,13 +9,6 @@ import math
 import os
 import warnings
 
-from test_scripts.geta_common import (
-    add_common_args,
-    resolve_data_dir,
-    resolve_output_dir,
-)
-from utils.utils import check_accuracy
-
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -35,6 +28,12 @@ from sanity_check.backends.vision_transformer.vision_transformer import (
     vit_base_patch16_384,
     vit_small_patch16_224,
 )
+from test_scripts.geta_common import (
+    add_common_args,
+    resolve_data_dir,
+    resolve_output_dir,
+)
+from utils.utils import check_accuracy
 
 # Ignore warnings
 warnings.filterwarnings("ignore")

@@ -1,5 +1,5 @@
 [project]
-authors = [{name = "Vikram Rangarajan", email = "rangarav@purdue.edu"}]
+authors = [{name = "Xiaoyi Qu", email = "xiq322@lehigh.edu"}, {name = "Tianyi Chen", email = "Tianyi.Chen@microsoft.com"}]
 dependencies = [
     "datasets>=2.19.2,<3",
     "einops>=0.8.1,<0.9",

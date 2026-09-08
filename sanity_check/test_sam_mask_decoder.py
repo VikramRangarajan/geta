@@ -34,6 +34,5 @@ class TestSamMaskDecoder(unittest.TestCase):
         oto_decoder.construct_subnet(out_dir=OUT_DIR)
 
 
-
 if __name__ == "__main__":
     unittest.main()

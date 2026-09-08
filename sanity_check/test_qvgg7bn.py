@@ -1,4 +1,3 @@
-
 # from only_train_once.quantization.qvgg7bn import QVGG7_BN
 import unittest
 

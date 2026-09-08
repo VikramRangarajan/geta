@@ -9,13 +9,6 @@ import math
 import os
 import warnings
 
-from test_scripts.geta_common import (
-    add_common_args,
-    create_exp_dir,
-    resolve_data_dir,
-)
-from utils.utils import check_accuracy
-
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -31,6 +24,12 @@ from tqdm import tqdm
 
 from only_train_once import OTO
 from only_train_once.quantization.quant_model import model_to_quantize_model
+from test_scripts.geta_common import (
+    add_common_args,
+    create_exp_dir,
+    resolve_data_dir,
+)
+from utils.utils import check_accuracy
 
 # Ignore warnings
 warnings.filterwarnings("ignore")

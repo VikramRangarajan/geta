@@ -367,9 +367,7 @@ class LlamaDecoderLayer(nn.Module):
         past_key_value: tuple[torch.Tensor] | None = None,
         output_attentions: bool | None = False,
         use_cache: bool | None = False,
-    ) -> tuple[
-        torch.FloatTensor, tuple[torch.FloatTensor, torch.FloatTensor] | None
-    ]:
+    ) -> tuple[torch.FloatTensor, tuple[torch.FloatTensor, torch.FloatTensor] | None]:
         """
         Args:
             hidden_states (`torch.FloatTensor`): input to the layer of shape `(batch, seq_len, embed_dim)`

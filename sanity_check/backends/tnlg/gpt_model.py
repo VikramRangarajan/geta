@@ -20,7 +20,6 @@ The classes are implemented as PyTorch nn.Module subclasses, and can be used for
 training and inference on language modeling tasks.
 """
 
-
 import torch
 from torch import nn
 
