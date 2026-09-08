@@ -1,0 +1,27 @@
+[project]
+authors = [{name = "Vikram Rangarajan", email = "rangarav@purdue.edu"}]
+dependencies = [
+    "datasets>=2.19.2,<3",
+    "einops>=0.8.1,<0.9",
+    "h5py>=3.9.0,<4",
+    "matplotlib>=3.5.0",
+    "numpy<2",
+    "scikit-image>=0.19.0",
+    "timm>=1.0.19,<2",
+    "torch==2.2.0",
+    "torchvision>=0.15.0,<0.20.0",
+    "tqdm>=4.67.1,<5",
+    "transformers>=4.33.3,<5",
+    "typer>=0.16.1,<0.17",
+]
+name = "geta"
+requires-python = ">=3.9"
+version = "0.1.0"
+
+[build-system]
+requires = ["uv_build>=0.12.10,<0.13"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = ["tutorials", "test_scripts", "sanity_check", "only_train_once", "utils"]
+module-root = ""

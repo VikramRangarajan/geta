@@ -10,15 +10,12 @@ import os
 import sys
 import warnings
 
-from geta_common import (
+from .geta_common import (
     add_common_args,
-    bootstrap_paths,
-    load_check_accuracy,
+    check_accuracy,
     resolve_data_dir,
     resolve_output_dir,
 )
-
-bootstrap_paths()
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -33,10 +30,6 @@ from torchvision.datasets import CIFAR10
 from tqdm import tqdm
 
 # from transformers import AutoImageProcessor
-try:
-    from utils.utils import check_accuracy
-except ImportError:
-    check_accuracy = load_check_accuracy()
 
 from only_train_once import OTO
 from only_train_once.quantization.quant_model import model_to_quantize_model
@@ -50,27 +43,6 @@ warnings.filterwarnings("ignore")
 
 # Set up logging
 logger = logging.getLogger("new")
-
-
-class StreamingDataset(IterableDataset):
-    def __init__(
-        self, hf_dataset, preprocess_func, length, max_samples_per_epoch=100000
-    ):
-        self.hf_dataset = hf_dataset
-        self.preprocess_func = preprocess_func
-        self.length = length
-        self.max_samples_per_epoch = max_samples_per_epoch
-
-    def __iter__(self):
-        count = 0
-        for example in self.hf_dataset:
-            if self.max_samples_per_epoch and count >= self.max_samples_per_epoch:
-                break
-            yield self.preprocess_func(example)
-            count += 1
-
-    def __len__(self):
-        return self.length
 
 
 def get_quant_param_dict(model):
@@ -263,7 +235,7 @@ def main(config):
     )
     # num_classes = 10 if dataset == "cifar10" else 1000
     dummy_input = torch.rand(input_size).to(device)
-        
+
     model = simpleViT_cifar10()
     q_model = model_to_quantize_model(model, num_bits=init_bit)
     oto = OTO(q_model.to(device), dummy_input=dummy_input)

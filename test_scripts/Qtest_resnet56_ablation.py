@@ -10,15 +10,12 @@ import warnings
 import argparse
 import json
 
-from geta_common import (
+from .geta_common import (
     add_common_args,
-    bootstrap_paths,
-    load_check_accuracy,
+    check_accuracy,
     resolve_data_dir,
     resolve_output_dir,
 )
-
-bootstrap_paths()
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -33,10 +30,6 @@ from tqdm import tqdm
 from logging import FileHandler
 from logging import Formatter
 # from transformers import AutoImageProcessor
-try:
-    from utils.utils import check_accuracy
-except ImportError:
-    check_accuracy = load_check_accuracy()
 
 from only_train_once import OTO
 from sanity_check.backends.vgg7 import vgg7_bn
@@ -64,26 +57,6 @@ except ImportError:
 
     mlflow = _NoMlflow()
 
-
-class StreamingDataset(IterableDataset):
-    def __init__(
-        self, hf_dataset, preprocess_func, length, max_samples_per_epoch=100000
-    ):
-        self.hf_dataset = hf_dataset
-        self.preprocess_func = preprocess_func
-        self.length = length
-        self.max_samples_per_epoch = max_samples_per_epoch
-
-    def __iter__(self):
-        count = 0
-        for example in self.hf_dataset:
-            if self.max_samples_per_epoch and count >= self.max_samples_per_epoch:
-                break
-            yield self.preprocess_func(example)
-            count += 1
-
-    def __len__(self):
-        return self.length
 
 
 def get_quant_param_dict(model):
@@ -374,34 +347,34 @@ class WarmupThenScheduler(torch.optim.lr_scheduler.LRScheduler):
 
 
 def main(config):
-    model_name=config.model_name  
-    dataset = config.dataset  
-    batch_size=config.batch_size  
-    num_workers=config.num_workers  
-    epochs=config.epochs  
-    lr=config.lr  
+    model_name=config.model_name
+    dataset = config.dataset
+    batch_size=config.batch_size
+    num_workers=config.num_workers
+    epochs=config.epochs
+    lr=config.lr
     lr_quant=config.lr_quant
-    weight_decay=config.weight_decay  
-    sparsity=config.sparsity  
-    projection_start_step=config.projection_start_step  
-    projection_periods=config.projection_periods  
-    projection_steps=config.projection_steps  
-    pruning_start_step=config.pruning_start_step  
-    pruning_periods=config.pruning_periods  
-    pruning_steps=config.pruning_steps  
-    lr_step=config.lr_step  
-    lr_gamma=config.lr_gamma  
-    variant=config.variant  
-    bit_reduction=config.bit_reduction  
+    weight_decay=config.weight_decay
+    sparsity=config.sparsity
+    projection_start_step=config.projection_start_step
+    projection_periods=config.projection_periods
+    projection_steps=config.projection_steps
+    pruning_start_step=config.pruning_start_step
+    pruning_periods=config.pruning_periods
+    pruning_steps=config.pruning_steps
+    lr_step=config.lr_step
+    lr_gamma=config.lr_gamma
+    variant=config.variant
+    bit_reduction=config.bit_reduction
     min_bit_wt=config.min_bit_wt
-    max_bit_wt=config.max_bit_wt 
+    max_bit_wt=config.max_bit_wt
     min_bit_act=config.min_bit_act
     max_bit_act=config.max_bit_act
-    mix_up=config.mix_up  
-    label_smooth=config.label_smooth  
-    seed=config.seed  
+    mix_up=config.mix_up
+    label_smooth=config.label_smooth
+    seed=config.seed
     ablation_name = config.ablation
-    
+
     assert pruning_start_step == projection_start_step + projection_steps
 
     mlflow.autolog()
@@ -417,7 +390,7 @@ def main(config):
     checkpoint_dir = os.path.join(output_dir, "checkpoints")
     os.makedirs(checkpoint_dir, exist_ok=True)
     MESSAGING_LOG_FILE = os.path.join(log_dir, f"{model_name}_{variant}_{sparsity}_{pruning_start_step}.txt")
-    
+
 
     output_logger.setLevel(LOG_LEVEL)
     output_logger_file_handler = FileHandler(MESSAGING_LOG_FILE)
@@ -437,7 +410,7 @@ def main(config):
     output_logger.info(f'Pruning steps: {pruning_steps:^3d}')
     output_logger.info(f'Learning rate scheduler steps: {lr_step:^3d}')
     output_logger.info(f'=======================================')
-    
+
     torch.manual_seed(seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     num_gpus = 1
@@ -451,14 +424,14 @@ def main(config):
     dummy_input = torch.rand(input_size).to(device)
 
     if model_name == "vgg7bn":
-        model = vgg7_bn(num_classes=num_classes) 
+        model = vgg7_bn(num_classes=num_classes)
         model = model_to_quantize_model(model)
     elif model_name == "resnet20":
         model = resnet20_cifar10()
         model = model_to_quantize_model(model)
     elif model_name == "resnet56":
         model = resnet56_cifar10()
-        model = model_to_quantize_model(model) 
+        model = model_to_quantize_model(model)
 
     oto = OTO(model.to(device), dummy_input=dummy_input)
 
@@ -500,10 +473,10 @@ def main(config):
     full_num_params = oto.compute_num_params(in_million=True)
     full_weight_size = oto.compute_weight_size(in_million=True)
     full_average_bit_width = oto.compute_average_bit_width()
-    
+
     # Hotfix for full_bops calculation
     full_bops["total"] = full_bops["total"] * 32 / 16
-    
+
     if not label_smooth:
         criterion = torch.nn.CrossEntropyLoss()
     else:
@@ -585,7 +558,7 @@ def main(config):
                 if mix_up and label_smooth:
                     targets = one_hot(targets, num_classes=num_classes, smoothing_eps=0.1)
                     inputs, targets = mixup_func(inputs, targets)
-            
+
             optimizer.zero_grad()
             outputs = model(inputs)
             loss = criterion(outputs, targets)
@@ -647,20 +620,20 @@ def main(config):
                     pass
         except Exception as e:
             output_logger.warning(f"Failed to save checkpoint at epoch {epoch}: {e}")
-            
+
         # loss_list.append(running_loss_avg)
-    
+
 
     output_logger.info(f"Best epoch: {best_epoch}. Best acc1: {best_acc1}%")
     mlflow.log_metric('best_acc1', best_acc1)
     output_logger.info("Training completed. Constructing subnet...")
-    
+
 
     # Construct the subnet and get the compressed model
     oto.construct_subnet(out_dir=os.path.join(output_dir, "subnet"))
     compressed_model = torch.load(oto.compressed_model_path)
     oto_compressed = OTO(compressed_model, dummy_input)
-    
+
     output_logger.info(f"Full MACs for Q{model_name}: {full_macs['total']} M MACs")
     output_logger.info(f"Full BOPs for Q{model_name}: {full_bops['total']} M BOPs")
     output_logger.info(f"Full num params for Q{model_name}: {full_num_params} M params")
@@ -672,7 +645,7 @@ def main(config):
         output_logger.info("-" * 75)
         for mac_info, bop_info in zip(full_macs['layer_info'], full_bops['layer_info']):
             output_logger.info(f"{mac_info['name']:<30} {mac_info['type']:<15} {mac_info['macs']:<15.2f} {bop_info['bops']:<15.2f}")
-    
+
     # Get compressed model MACs, BOPs, and number of parameters
     compressed_macs = oto_compressed.compute_macs(in_million=True, layerwise=True)
     compressed_bops = oto_compressed.compute_bops(in_million=True, layerwise=True) #we adjust the calculation to subtract 1 from the activation to simulate unsigned activations. (post relu)
@@ -722,7 +695,7 @@ def main(config):
     mlflow.log_metric('BOP_compression_ratio', full_bops['total'] / compressed_bops['total'])
     mlflow.log_metric('full_model_size', full_model_size)
     mlflow.log_metric('compressed_model_size', compressed_model_size)
-    
+
     # Print and visualize each layer bit width info
     param_dict = get_quant_param_dict(model)
     bit_dict = get_bitwidth_dict(param_dict)
@@ -748,7 +721,7 @@ def main(config):
     # ax.set_xticklabels(categories)
     # ax.legend()
     # plt.savefig(f'./log_new/{model_name}_bitwidth.pdf')
-    
+
     # Plot the loss function value curve
     # plt.figure(2)
     # ys = loss_list
@@ -791,7 +764,7 @@ def get_config():
     parser.add_argument("--label_smooth", type=int, default=0, help="lablel smoothing yes(1) or no(0)")
     parser.add_argument("--seed", type=int, default=0, help="random seed")
     parser.add_argument("--ablation", type=str, default="qhesso", help="ablation experiment name")
-        
+
     # Parse arguments
     config = add_common_args(parser).parse_args()
 
@@ -804,9 +777,7 @@ def get_config():
 
 
     return config
-    
+
 
 if __name__ == "__main__":
     main(get_config())
-
-    

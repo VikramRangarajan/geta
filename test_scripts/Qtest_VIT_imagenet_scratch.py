@@ -10,14 +10,12 @@ import os
 import sys
 import warnings
 
-from geta_common import (
+from .geta_common import (
     add_common_args,
-    bootstrap_paths,
-    load_check_accuracy,
     resolve_data_dir,
+    check_accuracy,
+    create_exp_dir,
 )
-
-bootstrap_paths()
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -31,18 +29,6 @@ import torchvision
 from torch.utils.data import DataLoader, IterableDataset
 from torchvision.datasets import CIFAR10
 from tqdm import tqdm
-
-# from transformers import AutoImageProcessor
-try:
-    from utils.utils import check_accuracy
-except ImportError:
-    from geta_common import load_check_accuracy
-
-    check_accuracy = load_check_accuracy()
-try:
-    from common.utils import create_exp_dir
-except ImportError:
-    from geta_common import create_exp_dir
 
 from only_train_once import OTO
 from only_train_once.quantization.quant_model import model_to_quantize_model
@@ -205,7 +191,7 @@ def get_data_loader(dataset: str, batch_size: int, num_workers: int, args: None)
         test_loader = torch.utils.data.DataLoader(
             test_set, batch_size=batch_size, shuffle=False,
             num_workers=8, pin_memory=True, sampler=val_sampler)
-    
+
     else:
         raise ValueError("Unsupported dataset")
 
@@ -312,7 +298,7 @@ def main(config):
     )
 
     # dummy_input = torch.rand(input_size)
-    
+
     if model_name == "vit":
         from sanity_check.backends.vision_transformer.vision_transformer import vit_small_patch16_224
         model = vit_small_patch16_224(pretrained=True, num_classes=1000)
@@ -583,7 +569,7 @@ def get_config():
     parser.add_argument("--ddp", type=bool, default=False, help="enable ddp")
     parser.add_argument("--train_dir", type=str, default="", help="Training data directory")
     parser.add_argument("--test_dir", type=str, default="", help="Testing data directory")
-    
+
 
     parser.add_argument("--variant", type=str, default="adam", help="Method variant")
     parser.add_argument(

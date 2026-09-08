@@ -10,10 +10,10 @@ import os
 import sys
 import warnings
 
-from geta_common import (
+from .geta_common import (
     add_common_args,
     bootstrap_paths,
-    load_check_accuracy,
+    check_accuracy,
     resolve_data_dir,
     resolve_output_dir,
 )
@@ -33,10 +33,6 @@ from torchvision.datasets import CIFAR10
 from tqdm import tqdm
 
 # from transformers import AutoImageProcessor
-try:
-    from utils.utils import check_accuracy
-except ImportError:
-    check_accuracy = load_check_accuracy()
 
 from only_train_once import OTO
 from only_train_once.quantization.quant_model import model_to_quantize_model
@@ -51,27 +47,6 @@ warnings.filterwarnings("ignore")
 
 # Set up logging
 logger = logging.getLogger("new")
-
-
-class StreamingDataset(IterableDataset):
-    def __init__(
-        self, hf_dataset, preprocess_func, length, max_samples_per_epoch=100000
-    ):
-        self.hf_dataset = hf_dataset
-        self.preprocess_func = preprocess_func
-        self.length = length
-        self.max_samples_per_epoch = max_samples_per_epoch
-
-    def __iter__(self):
-        count = 0
-        for example in self.hf_dataset:
-            if self.max_samples_per_epoch and count >= self.max_samples_per_epoch:
-                break
-            yield self.preprocess_func(example)
-            count += 1
-
-    def __len__(self):
-        return self.length
 
 
 def get_quant_param_dict(model):
@@ -261,7 +236,7 @@ def main(config):
     )
     # num_classes = 10 if dataset == "cifar10" else 1000
     dummy_input = torch.rand(input_size).to(device)
-        
+
     model = simpleViT_cifar10()
     model = vit_base_patch16_384(pretrained=True, num_classes=1000)
     model = vit_small_patch16_224(pretrained=True, num_classes=1000)
@@ -372,7 +347,7 @@ def main(config):
         with open(os.path.join(output_dir, "metrics_info.txt"), "a") as f1:
             f1.write(f"Epoch: {epoch}, loss: {running_loss_avg:5.3f}, norm_all: {opt_metrics.norm_params:5.2f}, grp_sparsity: {opt_metrics.group_sparsity:5.2f}, acc1: {accuracy1:5.2f}%, acc5: {accuracy5:5.2f}%, norm_import: {opt_metrics.norm_important_groups:5.2f}, norm_redund: {opt_metrics.norm_redundant_groups:5.2f}, num_grp_import: {opt_metrics.num_important_groups:5.2f}, num_grp_redund: {opt_metrics.num_redundant_groups:5.2f}, avg_wt_bit_width: {avg_wt_bit:5.2f}")
             # opt_metrics_epoch = optimizer.compute_metrics()
-         
+
         logger.info(
             f"Epoch: {epoch}, loss: {running_loss_avg:5.3f}, norm_all: {opt_metrics.norm_params:5.2f}, grp_sparsity: {opt_metrics.group_sparsity:5.2f}, acc1: {accuracy1:5.2f}%, acc5: {accuracy5:5.2f}%, norm_import: {opt_metrics.norm_important_groups:5.2f}, norm_redund: {opt_metrics.norm_redundant_groups:5.2f}, num_grp_import: {opt_metrics.num_important_groups:5.2f}, num_grp_redund: {opt_metrics.num_redundant_groups:5.2f}, avg_wt_bit_width: {avg_wt_bit:5.2f}"
         )

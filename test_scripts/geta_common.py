@@ -3,23 +3,11 @@ import logging
 import os
 import sys
 from torch.utils.data import DataLoader, IterableDataset
+from utils.utils import check_accuracy
 
 
 def repo_root():
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-
-def bootstrap_paths():
-    root = repo_root()
-    for p in (
-        root,
-        os.path.join(root, "test_scripts"),
-        os.path.join(root, "tutorials"),
-    ):
-        if p not in sys.path:
-            sys.path.insert(0, p)
-    return root
-
 
 def resolve_output_dir(explicit=None, label="run"):
     if explicit:
@@ -42,20 +30,6 @@ def add_common_args(parser):
     parser.add_argument("--output_dir", type=str, default=None)
     parser.add_argument("--data_dir", type=str, default=None)
     return parser
-
-
-def load_check_accuracy():
-    try:
-        from utils.utils import check_accuracy
-
-        return check_accuracy
-    except Exception:
-        pass
-    path = os.path.join(repo_root(), "tutorials", "utils", "utils.py")
-    spec = importlib.util.spec_from_file_location("geta_tutorial_utils", path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod.check_accuracy
 
 
 def create_exp_dir(config, outputs="outputs", exp_name="exp"):
