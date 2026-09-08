@@ -3,7 +3,6 @@
 This module contains the individual components of the Transformer model.
 """
 
-
 import numpy as np
 import torch
 import torch.nn.functional as f
@@ -296,9 +295,7 @@ class SelfAttention(nn.Module):
 class ProjLayer(nn.Module):
     """The projection layer."""
 
-    def __init__(
-        self, hidden_size: int, device: torch.device | None = None
-    ) -> None:
+    def __init__(self, hidden_size: int, device: torch.device | None = None) -> None:
         """Create a new instance of ProjLayer.
 
         Creates a new instance of ProjLayer with the given hidden size and at a

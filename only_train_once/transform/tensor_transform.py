@@ -19,7 +19,10 @@ class TensorTransform(IntEnum):
 
 
 def is_spread_transformation(transformation_type):
-    if transformation_type == TensorTransform.MULTIHEAD_NUMHEAD_SPREAD or transformation_type == TensorTransform.REVERSE_MULTIHEAD_NUMHEAD_SPREAD:
+    if (
+        transformation_type == TensorTransform.MULTIHEAD_NUMHEAD_SPREAD
+        or transformation_type == TensorTransform.REVERSE_MULTIHEAD_NUMHEAD_SPREAD
+    ):
         return True
     else:
         return False
@@ -80,11 +83,17 @@ def tensor_transformation(
         or transformation_type == TensorTransform.NO_PRUNE
     ):
         return tensor
-    elif transformation_type == TensorTransform.BASIC or transformation_type == TensorTransform.ACCESSORY:
+    elif (
+        transformation_type == TensorTransform.BASIC
+        or transformation_type == TensorTransform.ACCESSORY
+    ):
         return basic_transformation(tensor, num_groups)
     elif transformation_type == TensorTransform.MULTIHEAD_HEADDIM:
         return multihead_headdim_transformation(tensor, num_groups, num_heads)
-    elif transformation_type == TensorTransform.MULTIHEAD_NUMHEAD or transformation_type == TensorTransform.MULTIHEAD_NUMHEAD_SPREAD:
+    elif (
+        transformation_type == TensorTransform.MULTIHEAD_NUMHEAD
+        or transformation_type == TensorTransform.MULTIHEAD_NUMHEAD_SPREAD
+    ):
         return multihead_numhead_transformation(tensor, num_groups)
     elif transformation_type == TensorTransform.REVERSE_MULTIHEAD_HEADDIM:
         return reverse_multihead_headdim_transformation(tensor, num_groups, num_heads)

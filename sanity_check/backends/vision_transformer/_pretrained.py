@@ -14,16 +14,12 @@ class PretrainedCfg:
     file: str | None = None  # local / shared filesystem path
     state_dict: dict[str, Any] | None = None  # in-memory state dict
     hf_hub_id: str | None = None  # Hugging Face Hub model id ('organization/model')
-    hf_hub_filename: str | None = (
-        None  # Hugging Face Hub filename (overrides default)
-    )
+    hf_hub_filename: str | None = None  # Hugging Face Hub filename (overrides default)
 
     source: str | None = (
         None  # source of cfg / weight location used (url, file, hf-hub)
     )
-    architecture: str | None = (
-        None  # architecture variant can be set when not implicit
-    )
+    architecture: str | None = None  # architecture variant can be set when not implicit
     tag: str | None = None  # pretrained tag of source
     custom_load: bool = (
         False  # use custom model specific model.load_pretrained() (ie for npz files)

@@ -365,9 +365,9 @@ class SwinTransformerBlock(nn.Module):
             )  # nW, window_size, window_size, 1
             mask_windows = mask_windows.view(-1, self.window_area)
             attn_mask = mask_windows.unsqueeze(1) - mask_windows.unsqueeze(2)
-            attn_mask = attn_mask.masked_fill(
-                attn_mask != 0, (-100.0)
-            ).masked_fill(attn_mask == 0, 0.0)
+            attn_mask = attn_mask.masked_fill(attn_mask != 0, (-100.0)).masked_fill(
+                attn_mask == 0, 0.0
+            )
         else:
             attn_mask = None
         return attn_mask
@@ -393,8 +393,7 @@ class SwinTransformerBlock(nn.Module):
             return target_window_size, target_shift_size
 
         window_size = [
-            min(r, w)
-            for r, w in zip(self.input_resolution, target_window_size)
+            min(r, w) for r, w in zip(self.input_resolution, target_window_size)
         ]
         shift_size = [
             0 if r <= w else s
