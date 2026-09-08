@@ -3,7 +3,6 @@ import glob
 import os
 import random
 import subprocess
-import sys
 import zipfile
 
 import cv2
@@ -17,8 +16,6 @@ from skimage.color import rgb2ycbcr
 from skimage.metrics import peak_signal_noise_ratio
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-
-sys.path.append("..")
 from only_train_once import OTO
 from only_train_once.quantization.quant_model import model_to_quantize_model
 from sanity_check.backends import CarnNet

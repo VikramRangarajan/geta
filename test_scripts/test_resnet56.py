@@ -1,8 +1,4 @@
 # HESSO on resnet56 Cifar10 dataset
-
-import sys
-
-sys.path.append("..")
 from sanity_check.backends.resnet20_cifar10 import resnet56_cifar10
 from only_train_once import OTO
 import torch

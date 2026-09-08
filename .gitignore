@@ -215,3 +215,5 @@ logs/
 outputs
 graphify-out
 .zed
+cache
+sanity_check/cache

@@ -1,11 +1,8 @@
 import math
 import torch
 import torch.nn as nn
-import os
 import yaml
 import argparse
-import sys
-sys.path.extend(['./'])
 
 def get_timestep_embedding(timesteps, embedding_dim):
     """
@@ -102,7 +99,7 @@ class ResnetBlock(nn.Module):
                                      kernel_size=3,
                                      stride=1,
                                      padding=1)
-        
+
         if self.in_channels != self.out_channels:
             if self.use_conv_shortcut:
                 self.conv_shortcut = torch.nn.Conv2d(in_channels,
@@ -206,10 +203,10 @@ class DiffModel(nn.Module):
         resolution = config.data.image_size
         resamp_with_conv = config.model.resamp_with_conv
         num_timesteps = config.diffusion.num_diffusion_timesteps
-        
+
         if config.model.type == 'bayesian':
             self.logvar = nn.Parameter(torch.zeros(num_timesteps))
-        
+
         self.ch = ch
         self.temb_ch = self.ch*4
         self.num_resolutions = len(ch_mult)
@@ -347,12 +344,12 @@ class DiffModel(nn.Module):
                 hs_tensor = hs.pop()
                 module_key = str(i_level) + '-' + str(i_block)
                 if module_key not in self.break_dep_1x1s:
-                    h = self.up[i_level].block[i_block](    
+                    h = self.up[i_level].block[i_block](
                         torch.cat([h, hs_tensor], dim=1), temb)
                 else:
-                    h = self.up[i_level].block[i_block](    
+                    h = self.up[i_level].block[i_block](
                         torch.cat([
-                            self.break_dep_1x1s[module_key][0](h), 
+                            self.break_dep_1x1s[module_key][0](h),
                             self.break_dep_1x1s[module_key][1](hs_tensor)
                         ], dim=1), temb)
                 if len(self.up[i_level].attn) > 0:
