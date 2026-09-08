@@ -138,13 +138,13 @@ def get_data_loader(dataset: str, batch_size: int, num_workers: int, args: None)
             ]
         )
         trainset = CIFAR10(
-            root=os.path.join(resolve_data_dir(getattr(config, "data_dir", None)), "cifar10"),
+            root=os.path.join(resolve_data_dir(), "cifar10"),
             train=True,
             download=True,
             transform=transform_train,
         )
         testset = CIFAR10(
-            root=os.path.join(resolve_data_dir(getattr(config, "data_dir", None)), "cifar10"),
+            root=os.path.join(resolve_data_dir(), "cifar10"),
             train=False,
             download=True,
             transform=transform_test,

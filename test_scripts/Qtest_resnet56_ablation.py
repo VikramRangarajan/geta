@@ -45,7 +45,7 @@ warnings.filterwarnings("ignore")
 output_logger = logging.getLogger("wasted_meerkats.messaging")
 
 try:
-    import mlflow
+    import mlflow  # type: ignore
 except ImportError:
 
     class _NoMlflow:
