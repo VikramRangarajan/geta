@@ -10,6 +10,7 @@ import unittest
 # from sanity_check.test_qbert import TestQBert as TestQBert
 # from sanity_check.test_qcarn import TestQCARN as TestQCARN
 from sanity_check.test_qyolov5 import TestQYolov5 as TestQYolov5
+
 # from sanity_check.test_qsimplevit import TestQSimpleViT as TestQSimpleViT
 # from sanity_check.test_qphi2 import TestQPhi2 as TestQPhi2
 # from sanity_check.test_qvit import TestQViT as TestQViT

@@ -1,3 +1,4 @@
+from typing import TYPE_CHECKING
 import logging
 import math
 import os
@@ -13,6 +14,11 @@ from only_train_once.transform import (
 )
 
 from .base_hybrid_sparse_optimizer import BaseHybridSparseOptimizer
+
+if TYPE_CHECKING:
+    from only_train_once.optimizer.base_hybrid_sparse_optimizer import (
+        SparseOptimizerMetrics,
+    )
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -1002,7 +1008,7 @@ class GETA(BaseHybridSparseOptimizer):
             ):
                 self.commit_redundant_idxes()
 
-    def compute_metrics(self):
+    def compute_metrics(self) -> "SparseOptimizerMetrics":
         """Compute optimizer metrics, skipping quantization parameters."""
         self.opt_metrics.norm_params = 0.0
         self.opt_metrics.norm_important_groups = 0.0

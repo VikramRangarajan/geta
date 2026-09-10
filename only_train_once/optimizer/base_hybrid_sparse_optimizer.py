@@ -7,30 +7,32 @@ from only_train_once.transform import (
     index_transformation_param_group,
     tensor_transformation_param_group,
 )
+from dataclasses import dataclass
 
 from .base_optimizer import BaseOptimizer
 from .hyperparameter import DEFAULT_OPT_PARAMS, SUPPORT_GRADIENT_ESTIMATES
 from .importance_score import calculate_importance_score
 
 
+@dataclass
 class SparseOptimizerMetrics:
-    num_groups = 0
-    num_zero_groups = 0
-    num_important_groups = 0
-    num_redundant_groups = 0
+    num_groups: int = 0
+    num_zero_groups: int = 0
+    num_important_groups: int = 0
+    num_redundant_groups: int = 0
 
     # For CRIC
-    num_violating_groups = 0
-    num_trial_violating_groups = 0
-    num_historical_violating_groups = 0
+    num_violating_groups: int = 0
+    num_trial_violating_groups: int = 0
+    num_historical_violating_groups: int = 0
 
-    norm_violating_groups = 0.0
+    norm_violating_groups: float = 0.0
 
-    norm_params = 0.0
-    norm_important_groups = 0.0
-    norm_redundant_groups = 0.0
+    norm_params: float = 0.0
+    norm_important_groups: float = 0.0
+    norm_redundant_groups: float = 0.0
 
-    group_sparsity = 0.0
+    group_sparsity: float = 0.0
 
     def __repr__(self) -> str:
         return f"num_zero_grps: {self.num_zero_groups}, gs: {self.group_sparsity:.2f}, norm_params: {self.norm_params:.2f}, norm_import: {self.norm_important_groups:.2f}, norm_violating: {self.norm_violating_groups:.2f}, norm_redund: {self.norm_redundant_groups:.2f}, num_grps_import: {self.num_important_groups}, num_grps_redund: {self.num_redundant_groups}, num_grps_violating: {self.num_violating_groups}, num_grps_trial_violating: {self.num_trial_violating_groups}, num_grps_hist_violating: {self.num_historical_violating_groups}"
@@ -108,7 +110,7 @@ class BaseHybridSparseOptimizer(BaseOptimizer):
         self.target_num_redundant_groups = int(
             self.total_num_groups * min(self.target_group_sparsity, 0.999)
         )
-        self.opt_metrics = SparseOptimizerMetrics()
+        self.opt_metrics: SparseOptimizerMetrics = SparseOptimizerMetrics()
 
         self.auxiliary_param_groups = dict()
         for group in self.param_groups:
