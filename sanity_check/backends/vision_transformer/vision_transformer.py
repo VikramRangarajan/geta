@@ -135,8 +135,7 @@ class ViTAttention(nn.Module):
             attn = self.attn_drop(attn)
             x = attn @ v
 
-        # x = x.transpose(1, 2).reshape(B, N, C)
-        x = x.transpose(1, 2).view(B, N, -1)
+        x = x.transpose(1, 2).reshape(B, N, -1)
         x = self.proj(x)
         x = self.proj_drop(x)
         return x

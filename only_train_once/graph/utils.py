@@ -3,7 +3,7 @@ import textwrap
 import torch._C._onnx as _C_onnx
 from torch import _C
 from torch.onnx import symbolic_helper
-from torch.onnx._globals import GLOBALS
+from torch.onnx._internal.torchscript_exporter._globals import GLOBALS
 
 
 def _is_constant_tensor_list(node):

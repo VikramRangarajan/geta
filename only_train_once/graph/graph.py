@@ -23,10 +23,10 @@ from .node import Node
 from .node_group import NodeGroupComposedOp
 
 if Version(torch.__version__) >= Version("1.13.0"):
-    from torch.onnx._globals import GLOBALS
+    from torch.onnx._internal.torchscript_exporter._globals import GLOBALS
 
     # tested basd on 1.13 default value 14 does not support gridsample op in onnx
-    GLOBALS.export_onnx_opset_version = 16
+    GLOBALS.export_onnx_opset_version = 23
 
 from .utils import (
     _get_str_inside_parenthesis,
@@ -730,8 +730,8 @@ class Graph:
                     trace_graph, torch.onnx.OperatorExportTypes.ONNX
                 )
             elif Version(torch.__version__) >= Version("1.13.0"):
-                trace_graph = torch.onnx._optimize_graph(
-                    trace_graph, torch.onnx.OperatorExportTypes.ONNX
+                trace_graph = torch.onnx.utils._optimize_graph(
+                    trace_graph, torch.onnx.OperatorExportTypes.ONNX_ATEN_FALLBACK
                 )
             else:
                 raise f"Torch {torch.__version__} is not supported because of some bug in _optimize_trace."

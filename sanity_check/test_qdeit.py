@@ -8,6 +8,7 @@ import unittest
 
 import torch
 from backends.vision_transformer.DeiT import deit_tiny_patch16_224
+from timm.layers.config import set_fused_attn
 from torch import nn
 
 from only_train_once import OTO
@@ -18,6 +19,7 @@ OUT_DIR = "./cache"
 
 class TestQDeiT(unittest.TestCase):
     def test_sanity(self, dummy_input=torch.rand(1, 3, 224, 224)):
+        set_fused_attn(False, False)
         model = deit_tiny_patch16_224(pretrained=False, num_classes=1000)
         model.head = nn.Linear(model.head.in_features, 10)
         q_model = model_to_quantize_model(model)

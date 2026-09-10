@@ -6,6 +6,8 @@ from .graph import Graph
 from .optimizer import GETA, HESSO
 from .subnet_construction import automated_pruning_compression
 
+os.environ["TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD"] = "1"
+
 
 class OTO:
     def __init__(
@@ -148,7 +150,7 @@ class OTO:
         verbose="False",
         device="cuda",
         log_dir="outputs",
-    ):
+    ) -> GETA:
         self._optimizer = GETA(
             params=self._graph.get_param_groups(),
             lr=lr,

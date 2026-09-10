@@ -7,6 +7,7 @@ import torch
 from backends.vision_transformer.vision_transformer import (
     vit_small_patch16_224,
 )
+from timm.layers.config import set_fused_attn
 from torch import nn
 
 from only_train_once import OTO
@@ -17,6 +18,7 @@ OUT_DIR = "./cache"
 
 class TestQViT(unittest.TestCase):
     def test_sanity(self, dummy_input=torch.rand(1, 3, 224, 224)):
+        set_fused_attn(False, False)
         model = vit_small_patch16_224(pretrained=True, num_classes=1000)
         model.head = nn.Linear(model.head.in_features, 10)
 
