@@ -1,6 +1,7 @@
 [project]
 authors = [{name = "Vikram Rangarajan", email = "rangarav@purdue.edu"}]
 dependencies = [
+    "accelerate>=1.15.0",
     "datasets>=2.19.2,<3",
     "einops>=0.8.1,<0.9",
     "graphviz>=0.21",

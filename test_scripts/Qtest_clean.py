@@ -1,7 +1,6 @@
 import json
 import math
 import os
-import warnings
 from dataclasses import asdict
 import logging
 from typing import Literal
@@ -13,13 +12,13 @@ import wandb
 from pydantic_settings import BaseSettings
 from torch import nn
 
-# from PIL import Image
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from torchvision.datasets import CIFAR10
 from tqdm import tqdm
+from accelerate import Accelerator
+from accelerate.utils import TorchDynamoPlugin
 
-# from transformers import AutoImageProcessor
 from only_train_once import OTO
 from only_train_once.optimizer.utils import (
     load_checkpoint,
@@ -356,12 +355,13 @@ class WarmupThenScheduler(torch.optim.lr_scheduler.LRScheduler):
 
 
 def main(config: "Config"):
-
-    assert (
-        config.pruning_start_step
-        == config.projection_start_step + config.projection_steps
+    dynamo_plugin = TorchDynamoPlugin(
+        backend="inductor",  # Options: "inductor", "aot_eager", "aot_nvfuser", etc.
+        mode="default",  # Options: "default", "reduce-overhead", "max-autotune"
+        fullgraph=True,
+        dynamic=False,
     )
-
+    accelerator = Accelerator(dynamo_plugin=dynamo_plugin)
     wandb.init(config=config.model_dump())
 
     # Messaging logger
@@ -378,10 +378,8 @@ def main(config: "Config"):
     output_logger.info(config)
 
     torch.manual_seed(config.seed)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = accelerator.device
     num_gpus = 1
-    if device.type == "cuda":
-        torch.cuda.manual_seed(config.seed)
 
     train_loader, test_loader, input_size = get_data_loader(
         config.dataset, config.batch_size * num_gpus, config.num_workers, data_dir
@@ -432,6 +430,8 @@ def main(config: "Config"):
             min_bit_act=config.min_bit_act,
             max_bit_act=config.max_bit_act,
         )
+    else:
+        raise NotImplementedError()
 
     # Get full/original floating-point model MACs, BOPs, and number of parameters
     full_macs = oto.compute_macs(in_million=True, layerwise=True)
@@ -462,7 +462,6 @@ def main(config: "Config"):
 
     best_epoch = 0
     best_acc1 = 0.0
-    loss_list = []
     start_epoch = 0
     # Checkpoint resume: check TRAINER_RESUME / SLURM_RESTART_COUNT or existing checkpoint
     if (
@@ -541,45 +540,47 @@ def main(config: "Config"):
                 output_logger.warning(traceback.format_exc())
                 start_epoch = 0
 
+    model, optimizer, train_loader, lr_scheduler = accelerator.prepare(
+        model, optimizer, train_loader, lr_scheduler
+    )
     for epoch in range(start_epoch, config.epochs):
-        model.train()
         running_loss = 0.0
         for batch_idx, batch in enumerate(
             tqdm(train_loader, desc=f"Epoch {epoch + 1}/{config.epochs}")
         ):
-            if config.dataset == "imagenet":
-                inputs, targets = batch["pixel_values"], batch["labels"]
-            else:
-                inputs, targets = batch
-            inputs, targets = (
-                inputs.to(device, non_blocking=True),
-                targets.to(device, non_blocking=True),
-            )
+            with accelerator.accumulate(model):
+                if config.dataset == "imagenet":
+                    inputs, targets = batch["pixel_values"], batch["labels"]
+                else:
+                    inputs, targets = batch
 
-            with torch.no_grad():
-                if config.label_smooth and not config.mix_up:
-                    targets = one_hot(
-                        targets, num_classes=num_classes, smoothing_eps=0.1
-                    )
-                if not config.label_smooth and config.mix_up:
-                    targets = one_hot(targets, num_classes=num_classes)
-                    inputs, targets = mixup_func(inputs, targets)
-                if config.mix_up and config.label_smooth:
-                    targets = one_hot(
-                        targets, num_classes=num_classes, smoothing_eps=0.1
-                    )
-                    inputs, targets = mixup_func(inputs, targets)
+                with torch.no_grad():
+                    if config.label_smooth and not config.mix_up:
+                        targets = one_hot(
+                            targets, num_classes=num_classes, smoothing_eps=0.1
+                        )
+                    if not config.label_smooth and config.mix_up:
+                        targets = one_hot(targets, num_classes=num_classes)
+                        inputs, targets = mixup_func(inputs, targets)
+                    if config.mix_up and config.label_smooth:
+                        targets = one_hot(
+                            targets, num_classes=num_classes, smoothing_eps=0.1
+                        )
+                        inputs, targets = mixup_func(inputs, targets)
 
-            optimizer.zero_grad()
-            outputs = model(inputs)
-            loss = criterion(outputs, targets)
-            loss.backward()
-            optimizer.grad_clipping()
-            optimizer.step()
-            running_loss += loss.item()
-            lr_scheduler.step()
-
-        opt_metrics = optimizer.compute_metrics()
+                with accelerator.autocast():
+                    outputs = model(inputs)
+                    loss = criterion(outputs, targets)
+                accelerator.backward(loss)
+                if accelerator.sync_gradients:
+                    accelerator.clip_grad_value_(model.parameters(), 1.0)
+                optimizer.step()
+                lr_scheduler.step()
+                optimizer.zero_grad()
+                with torch.no_grad():
+                    running_loss += loss.detach()
+        running_loss = running_loss.item()
+        opt_metrics = optimizer.optimizer.compute_metrics()
         running_loss_avg = running_loss / len(train_loader)
 
         accuracy1, accuracy5 = check_accuracy(
@@ -606,7 +607,7 @@ def main(config: "Config"):
             torch.save(model, os.path.join(log_dir, "resnet20_best_acc1.pt"))
         # Save checkpoint for resume (every epoch)
         try:
-            ckpt = optimizer.create_checkpoint(
+            ckpt = optimizer.optimizer.create_checkpoint(
                 model.module if num_gpus > 1 else model, epoch, running_loss_avg
             )
             ckpt["best_acc1"] = best_acc1
@@ -798,6 +799,11 @@ def get_config():
     if config.batch_size != 64:
         config.lr *= config.batch_size / 64
         config.weight_decay *= config.batch_size / 64
+
+    assert (
+        config.pruning_start_step
+        == config.projection_start_step + config.projection_steps
+    )
     return config
 
 

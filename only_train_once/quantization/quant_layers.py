@@ -78,12 +78,12 @@ class SymQuantizerNonLinear(torch.autograd.Function):
         grad_x[input.ge(clip_val[1])] = 0
         grad_x[input.le(clip_val[0])] = 0
         # Useful quantities
-        range_pow = torch.exp(
-            t_quant * torch.log(torch.abs(q_m - q_s) + 1e-6)
-        )  # q_m <= q_s can happen
+        range_pow = torch.exp(t_quant * torch.log(torch.abs(q_m - q_s) + 1e-6))
+        # q_m <= q_s can happen
         range_pow_low = torch.exp(
             (t_quant - 1) * torch.log(torch.abs(q_m - q_s) + 1e-6)
-        )  # q_m <= q_s can happen
+        )
+        # q_m <= q_s can happen
         input_pow = torch.exp(t_quant * torch.log(input_abs - q_s))  # input_abs >= q_s
 
         grad_d_xq = torch.round(input_pow.div(d_quant)) - input_pow.div(d_quant)
@@ -103,25 +103,6 @@ class SymQuantizerNonLinear(torch.autograd.Function):
         grad_t_xq[input_abs <= q_s] = 0
         grad_t_xq = torch.sign(input) * grad_t_xq
         grad_t = torch.tensor([torch.sum(grad_output * grad_t_xq)], device=device)
-
-        # NaN detection
-        if torch.allclose(
-            torch.tensor([torch.sum(grad_output * grad_t_xq)], device=device),
-            torch.tensor([float("nan")], device=device),
-            equal_nan=True,
-        ):
-            error_message = (
-                f"Error: NaN appears in gradient!\n"
-                f"d: {d_quant.item():.5f}, t: {t_quant.item():.5f}, q_m: {q_m.item():.5f}, q_s: {q_s.item():.5f}\n"
-                f"input_abs-max: {torch.max(input_abs).item():.5f}, grad_output-max: {torch.max(grad_output).item():.5f}, grad_t_xq: {torch.max(grad_t_xq)}\n"
-                f"input_pow: {torch.min(input_pow)}, range_pow: {range_pow}, input_abs-min: {torch.min(input_abs)}\n"
-                f"grad_x: min={torch.min(grad_x):.5f}, max={torch.max(grad_x):.5f}, mean={torch.mean(grad_x):.5f}, std={torch.std(grad_x):.5f}\n"
-                f"grad_d: {grad_d.item():.5f}\n"
-                f"grad_qm: {grad_qm.item():.5f}\n"
-                f"grad_t: {grad_t.item():.5f}"
-            )
-            raise NanInGradientError(error_message)
-
         return grad_x, grad_d, grad_qm, grad_t, None, None
 
 
@@ -330,13 +311,17 @@ class QuantizeMixin:
 
         self.quant_type = quant_type
         self.quant_mode = quant_mode
-        self.weight_clip_val = weight_clip_val
-        self.act_clip_val = act_clip_val
+        self.weight_clip_val: torch.Tensor
+        self.act_clip_val: torch.Tensor
+        self.q_s: torch.Tensor
+        self.register_buffer("weight_clip_val", torch.tensor(weight_clip_val))
+        self.register_buffer("act_clip_val", torch.tensor(act_clip_val))
+        self.register_buffer("q_s", torch.tensor(0.0))
 
     def quantize_weight(self, weight: torch.tensor) -> torch.Tensor:
         """Quantize the weight tensor."""
-        weight_clip_val = torch.tensor(self.weight_clip_val, device=weight.device)
-        q_s = torch.tensor(0.0, device=weight.device)
+        weight_clip_val = self.weight_clip_val
+        q_s = self.q_s
         quantizer = _get_quantizer(self.quant_type)
         if self.quant_type == QuantizationType.SYMMETRIC_LINEAR:
             # Symmetric linear
@@ -362,8 +347,8 @@ class QuantizeMixin:
         if self.quant_mode != QuantizationMode.WEIGHT_AND_ACTIVATION:
             return activation
 
-        activation_clip_val = torch.tensor(self.act_clip_val, device=activation.device)
-        q_s = torch.tensor(0.0, device=activation.device)
+        activation_clip_val = self.act_clip_val
+        q_s = self.q_s
         quantizer = _get_quantizer(self.quant_type)
 
         if self.quant_type == QuantizationType.SYMMETRIC_LINEAR:
