@@ -443,7 +443,9 @@ def main(config: "Config"):
         opt_metrics = optimizer.optimizer.compute_metrics()
         running_loss_avg = running_loss / len(train_loader)
 
-        accuracy1, accuracy5 = check_accuracy_hf(model, accelerator, test_loader, two_input=False)
+        accuracy1, accuracy5 = check_accuracy_hf(
+            model, accelerator, test_loader, two_input=False
+        )
         if accelerator.is_main_process:
             avg_wt_bit = oto.compute_average_bit_width()
             output_logger.info(

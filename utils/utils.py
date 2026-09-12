@@ -17,6 +17,7 @@ def accuracy_topk(output, target, topk=(1,)):
         res.append(correct_k.mul_(100.0 / batch_size))
     return res
 
+
 def check_accuracy_hf(model, accelerator: Accelerator, testloader, two_input=False):
     correct1 = torch.tensor(0.0, device=accelerator.device)
     correct5 = torch.tensor(0.0, device=accelerator.device)
@@ -39,16 +40,17 @@ def check_accuracy_hf(model, accelerator: Accelerator, testloader, two_input=Fal
 
             prec1, prec5 = accuracy_topk(y_pred, y, topk=(1, 5))
 
-            correct1 += prec1.detach() * y.size(0)
-            correct5 += prec5.detach() * y.size(0)
+            correct1 += prec1.detach().reshape(()) * y.size(0)
+            correct5 += prec5.detach().reshape(()) * y.size(0)
 
     model = model.train()
-    correct1 = accelerator.reduce(correct1, reduction="sum")
-    correct5 = accelerator.reduce(correct5, reduction="sum")
-    total = accelerator.reduce(torch.tensor(total), reduction="sum")
+    correct1 = accelerator.reduce(correct1, reduction="sum").item()
+    correct5 = accelerator.reduce(correct5, reduction="sum").item()
+    total = accelerator.reduce(torch.tensor(total), reduction="sum").item()
     accuracy1 = correct1 / total
     accuracy5 = correct5 / total
     return accuracy1, accuracy5
+
 
 def check_accuracy(model, testloader, two_input=False):
     correct1 = 0
