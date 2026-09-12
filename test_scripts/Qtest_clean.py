@@ -1,6 +1,9 @@
+from datasets import load_dataset
+from pydantic import BaseModel
 import json
 import math
 import os
+from textwrap import dedent
 from dataclasses import asdict
 import logging
 from typing import Literal
@@ -10,7 +13,6 @@ import torch
 import torch.nn.functional as F
 import wandb
 from pydantic_settings import BaseSettings
-from torch import nn
 
 from torch.utils.data import DataLoader
 from torchvision import transforms
@@ -20,11 +22,6 @@ from accelerate import Accelerator
 from accelerate.utils import TorchDynamoPlugin
 
 from only_train_once import OTO
-from only_train_once.optimizer.utils import (
-    load_checkpoint,
-    save_checkpoint,
-    scan_checkpoint,
-)
 from only_train_once.quantization.quant_model import model_to_quantize_model
 from sanity_check.backends.resnet20_cifar10 import resnet20_cifar10, resnet56_cifar10
 from sanity_check.backends.vgg7 import vgg7_bn
@@ -32,7 +29,7 @@ from test_scripts.geta_common import (
     resolve_data_dir,
     resolve_output_dir,
 )
-from utils.utils import check_accuracy
+from utils.utils import check_accuracy_hf
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 output_logger = logging.getLogger(__name__)
@@ -88,156 +85,9 @@ def get_bitwidth_dict(param_dict):
     return bit_dict
 
 
-def compute_bop_compression_ratio(
-    original,
-    compressed,
-    bitwidths,
-    input_size=(1, 3, 32, 32),
-    original_weight_bitwidth=32,
-    activation_bitwidth=32,  # Fixed activation bitwidth for both models
-    verbose=True,
+def get_data_loader(
+    dataset: str, batch_size: int, num_workers: int, prefetch_factor: int, data_dir=None
 ):
-    total_original_bop = 0
-    total_compressed_bop = 0
-    total_original_mac = 0
-    total_compressed_mac = 0
-    current_input_size = input_size
-    prev_original_channels = input_size[1]
-    prev_compressed_channels = input_size[1]
-    prev_pl = 0  # Initial pruning ratio
-    layer_idx = 0
-    for (name, original_layer), (_, compressed_layer) in zip(
-        original.named_modules(), compressed.named_modules()
-    ):
-        if isinstance(original_layer, (nn.Conv2d, nn.Linear)) and name in bitwidths:
-            # Compute pruning ratios
-            original_channels = (
-                original_layer.out_channels
-                if isinstance(original_layer, nn.Conv2d)
-                else original_layer.out_features
-            )
-            compressed_channels = (
-                compressed_layer.out_channels
-                if isinstance(compressed_layer, nn.Conv2d)
-                else compressed_layer.out_features
-            )
-            pl = 1 - (compressed_channels / original_channels)
-            Pl = 1 - (1 - prev_pl) * (1 - pl)  # Layerwise pruning ratio
-
-            # Compute dimensions
-            if isinstance(original_layer, nn.Conv2d):
-                mw_l, mh_l = current_input_size[2], current_input_size[3]
-                kw, kh = original_layer.kernel_size
-            else:  # Linear layer
-                mw_l, mh_l = 1, 1
-                kw, kh = 1, 1
-
-            # Compute MAC counts
-            mac_original = (
-                (1 - prev_pl)
-                * prev_original_channels
-                * (1 - pl)
-                * original_channels
-                * mw_l
-                * mh_l
-                * kw
-                * kh
-            )
-            mac_compressed = (
-                (1 - prev_pl)
-                * prev_compressed_channels
-                * (1 - pl)
-                * compressed_channels
-                * mw_l
-                * mh_l
-                * kw
-                * kh
-            )
-
-            # Add MAC counts to totals
-            total_original_mac += mac_original
-            total_compressed_mac += mac_compressed
-
-            # Compute BOP counts
-            bw_l = round(bitwidths[name])
-            bop_original = mac_original * original_weight_bitwidth * activation_bitwidth
-            bop_compressed = mac_compressed * bw_l * activation_bitwidth
-
-            total_original_bop += bop_original
-            total_compressed_bop += bop_compressed
-
-            if verbose:
-                output_logger.info(f"Layer name: {name}, Layer index: {layer_idx}")
-                output_logger.info(
-                    f"Original channels: {original_channels}, Compressed channels: {compressed_channels}"
-                )
-                output_logger.info(
-                    f"Pruning ratio (pl): {pl:.4f}, Layerwise pruning ratio (Pl): {Pl:.4f}"
-                )
-                output_logger.info(
-                    f"MAC count - Original: {mac_original / 1e6:.4f} M, Compressed: {mac_compressed / 1e6:.4f} M"
-                )
-                output_logger.info(
-                    f"BOP count - Original: {bop_original / 1e9:.4f} G, Compressed: {bop_compressed / 1e9:.4f} G"
-                )
-                output_logger.info(
-                    f"Weight Bitwidth - Original: {original_weight_bitwidth}, Compressed: {bw_l}"
-                )
-                output_logger.info(f"Activation Bitwidth: {activation_bitwidth}")
-                output_logger.info("--------------------")
-
-            # Update for next layer
-            prev_original_channels = original_channels
-            prev_compressed_channels = compressed_channels
-            prev_pl = pl
-            if isinstance(original_layer, nn.Conv2d):
-                current_input_size = (
-                    current_input_size[0],
-                    original_channels,
-                    (
-                        current_input_size[2]
-                        + 2 * original_layer.padding[0]
-                        - original_layer.kernel_size[0]
-                    )
-                    // original_layer.stride[0]
-                    + 1,
-                    (
-                        current_input_size[3]
-                        + 2 * original_layer.padding[1]
-                        - original_layer.kernel_size[1]
-                    )
-                    // original_layer.stride[1]
-                    + 1,
-                )
-            layer_idx += 1
-
-    bop_compression_ratio = (
-        total_original_bop / total_compressed_bop
-        if total_compressed_bop > 0
-        else float("inf")
-    )
-    mac_compression_ratio = (
-        total_original_mac / total_compressed_mac
-        if total_compressed_mac > 0
-        else float("inf")
-    )
-
-    if verbose:
-        output_logger.info(f"Total Original MAC: {total_original_mac / 1e9:.4f} GMACs")
-        output_logger.info(
-            f"Total Compressed MAC: {total_compressed_mac / 1e9:.4f} GMACs"
-        )
-        output_logger.info(f"MAC Compression Ratio: {mac_compression_ratio:.4f}")
-        output_logger.info(f"Total Original BOP: {total_original_bop / 1e9:.4f} GBOPs")
-        output_logger.info(
-            f"Total Compressed BOP: {total_compressed_bop / 1e9:.4f} GBOPs"
-        )
-        output_logger.info(f"BOP Compression Ratio: {bop_compression_ratio:.4f}")
-
-    return bop_compression_ratio, total_original_mac, total_compressed_mac
-
-
-def get_data_loader(dataset: str, batch_size: int, num_workers: int, data_dir=None):
     data_dir = resolve_data_dir(data_dir)
     if dataset == "cifar10":
         transform_train = transforms.Compose(
@@ -271,25 +121,60 @@ def get_data_loader(dataset: str, batch_size: int, num_workers: int, data_dir=No
             transform=transform_test,
         )
         input_size = (1, 3, 32, 32)
-        train_loader = DataLoader(
-            trainset,
-            batch_size=batch_size,
-            shuffle=True,
-            num_workers=num_workers,
-            pin_memory=True,
-        )
-        test_loader = DataLoader(
-            testset,
-            batch_size=batch_size,
-            shuffle=False,
-            num_workers=num_workers,
-            pin_memory=True,
-        )
     elif dataset == "imagenet":
-        raise ValueError("Unsupported dataset")
+        input_size = (1, 3, 224, 224)
+        transform_train = transforms.Compose(
+            [
+                transforms.RandomResizedCrop(224),
+                transforms.RandomHorizontalFlip(),
+                transforms.ColorJitter(
+                    brightness=0.4, contrast=0.4, saturation=0.4, hue=0.2
+                ),
+                transforms.ToTensor(),
+                transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+            ]
+        )
+
+        transform_test = transforms.Compose(
+            [
+                transforms.Resize(256),
+                transforms.CenterCrop(224),
+                transforms.ToTensor(),
+                transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+            ]
+        )
+
+        def get_transform_fn(transforms):
+            def apply_transforms(example):
+                return {
+                    "image": transforms(example["image"]),
+                    "label": example["label"],
+                }
+
+        train = load_dataset("ILSVRC/imagenet-1k", split="train")
+        trainset = train.map(get_transform_fn(transform_train))
+        test = load_dataset("ILSVRC/imagenet-1k", split="test")
+        testset = test.map(get_transform_fn(transform_test))
     else:
         raise ValueError("Unsupported dataset")
 
+    train_loader = DataLoader(
+        trainset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        pin_memory=True,
+        prefetch_factor=prefetch_factor,
+        drop_last=True,
+    )
+    test_loader = DataLoader(
+        testset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True,
+        prefetch_factor=prefetch_factor,
+    )
     return train_loader, test_loader, input_size
 
 
@@ -354,6 +239,19 @@ class WarmupThenScheduler(torch.optim.lr_scheduler.LRScheduler):
             return super().step(epoch)
 
 
+class TrainingState(BaseModel):
+    start_epoch: int
+    best_acc1: float
+    best_epoch: int
+
+    def state_dict(self):
+        return self.model_dump()
+
+    def load_state_dict(self, state):
+        for k, v in state.items():
+            setattr(self, k, v)
+
+
 def main(config: "Config"):
     dynamo_plugin = TorchDynamoPlugin(
         backend="inductor",  # Options: "inductor", "aot_eager", "aot_nvfuser", etc.
@@ -375,29 +273,63 @@ def main(config: "Config"):
     os.makedirs(checkpoint_dir, exist_ok=True)
 
     # Setup info
-    output_logger.info(config)
+    output_logger.info(config.model_dump_json(indent=2))
 
     torch.manual_seed(config.seed)
     device = accelerator.device
-    num_gpus = 1
 
     train_loader, test_loader, input_size = get_data_loader(
-        config.dataset, config.batch_size * num_gpus, config.num_workers, data_dir
+        config.dataset,
+        config.batch_size,
+        config.num_workers,
+        config.prefetch_factor,
+        data_dir,
     )
     num_classes = 10 if config.dataset == "cifar10" else 1000
     dummy_input = torch.rand(input_size).to(device)
 
     if config.model_name == "vgg7bn":
         model = vgg7_bn(num_classes=num_classes)
-        model = model_to_quantize_model(model)
     elif config.model_name == "resnet20":
         model = resnet20_cifar10()
-        model = model_to_quantize_model(model)
     elif config.model_name == "resnet56":
         model = resnet56_cifar10()
-        model = model_to_quantize_model(model)
+    elif config.model_name == "vit":
+        from sanity_check.backends.vision_transformer.vision_transformer import (
+            vit_small_patch16_224,
+        )
+
+        model = vit_small_patch16_224(pretrained=True, num_classes=1000)
+    elif config.model_name == "deit":
+        from sanity_check.backends.vision_transformer.DeiT import deit_tiny_patch16_224
+
+        model = deit_tiny_patch16_224(pretrained=True, num_classes=1000)
+    elif config.model_name == "pvt":
+        from sanity_check.backends.vision_transformer.PVT import pvt_v2_b0
+
+        model = pvt_v2_b0(pretrained=True, num_classes=1000)
+    elif config.model_name == "swin":
+        from sanity_check.backends.vision_transformer.Swin import (
+            swin_tiny_patch4_window7_224,
+        )
+
+        model = swin_tiny_patch4_window7_224(pretrained=True, num_classes=1000)
+
+    model = model_to_quantize_model(model, num_bits=config.init_bit)
 
     oto = OTO(model.to(device), dummy_input=dummy_input)
+
+    if config.model_name == "vit" or config.model_name == "deit":
+        oto.mark_unprunable_by_param_names(["patch_embed.proj.weight", "pos_embed"])
+    elif config.model_name == "pvt":
+        model = None
+    elif config.model_name == "swin":
+        unprunable_list = ["patch_embed.proj.weight", "pos_embed"]
+        for name, param in model.named_parameters():
+            if "attn.qkv." in name:
+                unprunable_list.append(name)
+
+        oto.mark_unprunable_by_param_names(unprunable_list)
 
     # Add the visualization to make sure that everything quant_act_layers.py works well.
     # oto.visualize(view=False, out_dir='./cache', display_flops=True, display_params=True, display_macs=True)
@@ -441,7 +373,7 @@ def main(config: "Config"):
     full_average_bit_width = oto.compute_average_bit_width()
 
     # Hotfix for full_bops calculation
-    full_bops["total"] = full_bops["total"] * 32 / 16
+    full_bops["total"] = full_bops["total"] * 32 / config.init_bit
 
     if not config.label_smooth:
         criterion = torch.nn.CrossEntropyLoss()
@@ -456,101 +388,29 @@ def main(config: "Config"):
     lr_scheduler = WarmupThenScheduler(
         optimizer, warmup_steps=5 * len(train_loader), after_scheduler=lr_scheduler
     )
-    if num_gpus > 1:
-        output_logger.info(f"Using {num_gpus} GPUs for training")
-        model = nn.DataParallel(model)
 
-    best_epoch = 0
-    best_acc1 = 0.0
-    start_epoch = 0
+    state = TrainingState(start_epoch=0, best_acc1=0.0, best_epoch=0)
+
+    accelerator.register_for_checkpointing(state)
+
+    model, optimizer, train_loader, test_loader, lr_scheduler = accelerator.prepare(
+        model, optimizer, train_loader, test_loader, lr_scheduler
+    )
+
     # Checkpoint resume: check TRAINER_RESUME / SLURM_RESTART_COUNT or existing checkpoint
     if (
         os.environ.get("TRAINER_RESUME") == "1"
         or os.environ.get("SLURM_RESTART_COUNT", "0") != "0"
     ):
-        ckpt_path = scan_checkpoint(checkpoint_dir, "ckpt_")
-        if ckpt_path is not None:
-            try:
-                output_logger.info(f"Attempting resume from {ckpt_path}")
-                ckpt = load_checkpoint(ckpt_path, device)
-                # model
-                model_to_load = model.module if num_gpus > 1 else model
-                model_to_load.load_state_dict(ckpt["model_state_dict"])
-                # Restore optimizer counters without full load_state_dict to avoid ID mismatch
-                opt_state = ckpt.get("optimizer_state_dict", {})
-                for key in [
-                    "num_steps",
-                    "curr_pruning_period",
-                    "start_pruning_step",
-                    "pruning_periods",
-                    "pruning_steps",
-                    "start_projection_step",
-                    "projection_periods",
-                    "projection_steps",
-                    "pruning_period_duration",
-                    "projection_period_duration",
-                    "target_num_redundant_groups",
-                    "pruned_group_idxes",
-                    "bit_layers",
-                    "min_bit_wt",
-                    "max_bit_wt",
-                    "min_bit_act",
-                    "max_bit_act",
-                ]:
-                    if key in opt_state:
-                        try:
-                            setattr(optimizer, key, opt_state[key])
-                        except Exception:
-                            pass
-                # Restore per-group fields
-                try:
-                    ckpt_groups = opt_state.get("param_groups", [])
-                    for pg, ckpt_pg in zip(optimizer.param_groups, ckpt_groups):
-                        for k in [
-                            "important_idxes",
-                            "active_redundant_idxes",
-                            "pruned_idxes",
-                            "importance_scores",
-                        ]:
-                            if k in ckpt_pg:
-                                pg[k] = ckpt_pg[k]
-                except Exception as e:
-                    output_logger.warning(f"Could not restore param_groups: {e}")
-                # scheduler
-                if (
-                    "scheduler_state_dict" in ckpt
-                    and ckpt["scheduler_state_dict"] is not None
-                ):
-                    try:
-                        lr_scheduler.load_state_dict(ckpt["scheduler_state_dict"])
-                    except Exception as e:
-                        output_logger.warning(f"Could not load scheduler state: {e}")
-                start_epoch = ckpt["epoch"] + 1
-                best_acc1 = ckpt.get("best_acc1", 0.0)
-                best_epoch = ckpt.get("best_epoch", 0)
-                output_logger.info(
-                    f"Resumed from epoch {start_epoch} (ckpt epoch {ckpt['epoch']}), best_acc1={best_acc1:.2f}%"
-                )
-            except Exception as e:
-                output_logger.warning(
-                    f"Failed to resume from checkpoint {ckpt_path}: {e}"
-                )
-                import traceback
-
-                output_logger.warning(traceback.format_exc())
-                start_epoch = 0
-
-    model, optimizer, train_loader, lr_scheduler = accelerator.prepare(
-        model, optimizer, train_loader, lr_scheduler
-    )
-    for epoch in range(start_epoch, config.epochs):
+        accelerator.load_state()
+    for epoch in range(state.start_epoch, config.epochs):
         running_loss = 0.0
         for batch_idx, batch in enumerate(
             tqdm(train_loader, desc=f"Epoch {epoch + 1}/{config.epochs}")
         ):
             with accelerator.accumulate(model):
                 if config.dataset == "imagenet":
-                    inputs, targets = batch["pixel_values"], batch["labels"]
+                    inputs, targets = batch["image"], batch["labels"]
                 else:
                     inputs, targets = batch
 
@@ -583,128 +443,89 @@ def main(config: "Config"):
         opt_metrics = optimizer.optimizer.compute_metrics()
         running_loss_avg = running_loss / len(train_loader)
 
-        accuracy1, accuracy5 = check_accuracy(
-            model.module if num_gpus > 1 else model, test_loader, two_input=False
-        )
-        avg_wt_bit = oto.compute_average_bit_width()
-        output_logger.info(
-            f"Epoch: {epoch}, loss: {running_loss_avg:5.3f}, norm_all: {opt_metrics.norm_params:5.2f}, grp_sparsity: {opt_metrics.group_sparsity:5.2f}, acc1: {accuracy1:5.2f}%, acc5: {accuracy5:5.2f}%, norm_import: {opt_metrics.norm_important_groups:5.2f}, norm_redund: {opt_metrics.norm_redundant_groups:5.2f}, num_grp_import: {opt_metrics.num_important_groups:5.2f}, num_grp_redund: {opt_metrics.num_redundant_groups:5.2f}, avg_wt_bit_width: {avg_wt_bit:5.2f}"
-        )
-        wandb.log(
-            dict(
-                epoch=epoch,
-                running_loss_avg=running_loss_avg,
-                accuracy1=accuracy1,
-                accuracy5=accuracy5,
-                avg_wt_bit_width=avg_wt_bit,
-                lr=optimizer.param_groups[0]["lr"],
-                **asdict(opt_metrics),
+        accuracy1, accuracy5 = check_accuracy_hf(model, accelerator, test_loader, two_input=False)
+        if accelerator.is_main_process:
+            avg_wt_bit = oto.compute_average_bit_width()
+            output_logger.info(
+                f"Epoch: {epoch}, loss: {running_loss_avg:5.3f}, norm_all: {opt_metrics.norm_params:5.2f}, grp_sparsity: {opt_metrics.group_sparsity:5.2f}, acc1: {accuracy1:5.2f}%, acc5: {accuracy5:5.2f}%, norm_import: {opt_metrics.norm_important_groups:5.2f}, norm_redund: {opt_metrics.norm_redundant_groups:5.2f}, num_grp_import: {opt_metrics.num_important_groups:5.2f}, num_grp_redund: {opt_metrics.num_redundant_groups:5.2f}, avg_wt_bit_width: {avg_wt_bit:5.2f}"
             )
-        )
-        if accuracy1 > best_acc1:
-            best_acc1 = accuracy1
+            wandb.log(
+                dict(
+                    epoch=epoch,
+                    running_loss_avg=running_loss_avg,
+                    accuracy1=accuracy1,
+                    accuracy5=accuracy5,
+                    avg_wt_bit_width=avg_wt_bit,
+                    lr=optimizer.param_groups[0]["lr"],
+                    **asdict(opt_metrics),
+                )
+            )
+        if accuracy1 > state.best_acc1:
+            state.best_acc1 = accuracy1
             best_epoch = epoch
-            torch.save(model, os.path.join(log_dir, "resnet20_best_acc1.pt"))
         # Save checkpoint for resume (every epoch)
-        try:
-            ckpt = optimizer.optimizer.create_checkpoint(
-                model.module if num_gpus > 1 else model, epoch, running_loss_avg
-            )
-            ckpt["best_acc1"] = best_acc1
-            ckpt["best_epoch"] = best_epoch
-            try:
-                ckpt["scheduler_state_dict"] = lr_scheduler.state_dict()
-            except:
-                ckpt["scheduler_state_dict"] = None
-            save_checkpoint(os.path.join(checkpoint_dir, f"ckpt_{epoch}.pt"), ckpt)
-            # keep only last 3 checkpoints
-            ckpts = sorted(
-                [f for f in os.listdir(checkpoint_dir) if f.startswith("ckpt_")],
-                key=lambda x: int(x.split("_")[-1].split(".")[0]),
-            )
-            for old in ckpts[:-3]:
-                try:
-                    os.remove(os.path.join(checkpoint_dir, old))
-                except:
-                    pass
-        except Exception as e:
-            output_logger.warning(f"Failed to save checkpoint at epoch {epoch}: {e}")
-
-        # loss_list.append(running_loss_avg)
-
-    output_logger.info(f"Best epoch: {best_epoch}. Best acc1: {best_acc1}%")
-    output_logger.info("Training completed. Constructing subnet...")
+        accelerator.save_state(os.path.join(checkpoint_dir, wandb.run.id))
 
     # Construct the subnet and get the compressed model
-    oto.construct_subnet(out_dir=os.path.join(output_dir, "subnet"))
-    compressed_model = torch.load(oto.compressed_model_path)
-    oto_compressed = OTO(compressed_model, dummy_input)
+    if accelerator.is_main_process:
+        output_logger.info(f"Best epoch: {best_epoch}. Best acc1: {state.best_acc1}%")
+        output_logger.info("Training completed. Constructing subnet...")
+        oto.construct_subnet(out_dir=os.path.join(output_dir, "subnet"))
+        compressed_model = torch.load(oto.compressed_model_path)
+        oto_compressed = OTO(compressed_model, dummy_input)
 
-    output_logger.info(
-        f"Full MACs for Q{config.model_name}: {full_macs['total']} M MACs"
-    )
-    output_logger.info(
-        f"Full BOPs for Q{config.model_name}: {full_bops['total']} M BOPs"
-    )
-    output_logger.info(
-        f"Full num params for Q{config.model_name}: {full_num_params} M params"
-    )
-    output_logger.info(
-        f"Full weight size for Q{config.model_name}: {full_weight_size['total']} MB"
-    )
-    output_logger.info(
-        f"Full average weight bit width for Q{config.model_name}: {full_average_bit_width} bits"
-    )
-    if "layer_info" in full_macs and "layer_info" in full_bops:
-        output_logger.info("Layer-by-layer breakdown for full model:")
-        output_logger.info(
-            f"{'Layer':<30} {'Type':<15} {'MACs (M)':<15} {'BOPs (M)':<15}"
-        )
-        output_logger.info("-" * 75)
-        for mac_info, bop_info in zip(full_macs["layer_info"], full_bops["layer_info"]):
+        msg = dedent(f"""
+        Full MACs for Q{config.model_name}: {full_macs["total"]} M MACs
+        Full BOPs for Q{config.model_name}: {full_bops["total"]} M BOPs
+        Full num params for Q{config.model_name}: {full_num_params} M params
+        Full weight size for Q{config.model_name}: {full_weight_size["total"]} MB
+        Full average weight bit width for Q{config.model_name}: {full_average_bit_width} bits
+        """)
+        output_logger.info(msg)
+        if "layer_info" in full_macs and "layer_info" in full_bops:
+            output_logger.info("Layer-by-layer breakdown for full model:")
             output_logger.info(
-                f"{mac_info['name']:<30} {mac_info['type']:<15} {mac_info['macs']:<15.2f} {bop_info['bops']:<15.2f}"
+                f"{'Layer':<30} {'Type':<15} {'MACs (M)':<15} {'BOPs (M)':<15}"
             )
+            output_logger.info("-" * 75)
+            for mac_info, bop_info in zip(
+                full_macs["layer_info"], full_bops["layer_info"]
+            ):
+                output_logger.info(
+                    f"{mac_info['name']:<30} {mac_info['type']:<15} {mac_info['macs']:<15.2f} {bop_info['bops']:<15.2f}"
+                )
 
-    # Get compressed model MACs, BOPs, and number of parameters
-    compressed_macs = oto_compressed.compute_macs(in_million=True, layerwise=True)
-    compressed_bops = oto_compressed.compute_bops(
-        in_million=True, layerwise=True
-    )  # we adjust the calculation to subtract 1 from the activation to simulate unsigned activations. (post relu)
-    compressed_num_params = oto_compressed.compute_num_params(in_million=True)
-    compressed_weight_size = oto_compressed.compute_weight_size(in_million=True)
-    compressed_average_bit_width = oto_compressed.compute_average_bit_width()
+        # Get compressed model MACs, BOPs, and number of parameters
+        compressed_macs = oto_compressed.compute_macs(in_million=True, layerwise=True)
+        compressed_bops = oto_compressed.compute_bops(
+            in_million=True, layerwise=True
+        )  # we adjust the calculation to subtract 1 from the activation to simulate unsigned activations. (post relu)
+        compressed_num_params = oto_compressed.compute_num_params(in_million=True)
+        compressed_weight_size = oto_compressed.compute_weight_size(in_million=True)
+        compressed_average_bit_width = oto_compressed.compute_average_bit_width()
 
-    output_logger.info(
-        f"Compressed MACs for Q{config.model_name}: {compressed_macs['total']} M MACs"
-    )
-    output_logger.info(
-        f"Compressed BOPs for Q{config.model_name}: {compressed_bops['total']} M BOPs"
-    )
-    output_logger.info(
-        f"Compressed num params for Q{config.model_name}: {compressed_num_params} M params"
-    )
-    output_logger.info(
-        f"Compressed weight size for Q{config.model_name}: {compressed_weight_size['total']} MB"
-    )
-    output_logger.info(
-        f"Compressed average weight bit width for Q{config.model_name}: {compressed_average_bit_width} bits"
-    )
-
-    wandb.log(
-        {
-            "full_macs": full_macs["total"],
-            "full_bops": full_bops["total"],
-            "full_num_params": full_num_params,
-            "full_weight_size": full_weight_size["total"],
-            "full_average_bit_width": full_average_bit_width,
-            "compressed_macs": compressed_macs["total"],
-            "compressed_bops": compressed_bops["total"],
-            "compressed_num_params": compressed_num_params,
-            "compressed_weight_size": compressed_weight_size["total"],
-            "compressed_average_bit_width": compressed_average_bit_width,
-        }
-    )
+        msg = dedent(f"""
+            Compressed MACs for Q{config.model_name}: {compressed_macs["total"]} M MACs
+            Compressed BOPs for Q{config.model_name}: {compressed_bops["total"]} M BOPs
+            Compressed num params for Q{config.model_name}: {compressed_num_params} M params
+            Compressed weight size for Q{config.model_name}: {compressed_weight_size["total"]} MB
+            Compressed average weight bit width for Q{config.model_name}: {compressed_average_bit_width} bits
+        """)
+        output_logger.info(msg)
+        wandb.log(
+            {
+                "full_macs": full_macs["total"],
+                "full_bops": full_bops["total"],
+                "full_num_params": full_num_params,
+                "full_weight_size": full_weight_size["total"],
+                "full_average_bit_width": full_average_bit_width,
+                "compressed_macs": compressed_macs["total"],
+                "compressed_bops": compressed_bops["total"],
+                "compressed_num_params": compressed_num_params,
+                "compressed_weight_size": compressed_weight_size["total"],
+                "compressed_average_bit_width": compressed_average_bit_width,
+            }
+        )
 
     if "layer_info" in compressed_macs and "layer_info" in compressed_bops:
         output_logger.info("Layer-by-layer breakdown for compressed model:")
@@ -719,38 +540,35 @@ def main(config: "Config"):
                 f"{mac_info['name']:<30} {mac_info['type']:<15} {mac_info['macs']:<15.2f} {bop_info['bops']:<15.2f}"
             )
 
-    output_logger.info(
-        f"MAC reduction    : {(1.0 - compressed_macs['total'] / full_macs['total']) * 100}%"
-    )
-    output_logger.info(
-        f"BOP reduction    : {(1.0 - compressed_bops['total'] / full_bops['total']) * 100}%"
-    )
-    output_logger.info(
-        f"Param reduction  : {(1.0 - compressed_num_params / full_num_params) * 100}%"
-    )
-    output_logger.info(f"MAC ratio: {full_macs['total'] / compressed_macs['total']}")
-    output_logger.info(
-        f"BOP compresion ratio: {full_bops['total'] / compressed_bops['total']}"
-    )
+    msg = dedent(f"""
+        MAC reduction    : {(1.0 - compressed_macs["total"] / full_macs["total"]) * 100}%
+        BOP reduction    : {(1.0 - compressed_bops["total"] / full_bops["total"]) * 100}%
+        Param reduction  : {(1.0 - compressed_num_params / full_num_params) * 100}%
+        MAC ratio: {full_macs["total"] / compressed_macs["total"]}
+        BOP compresion ratio: {full_bops["total"] / compressed_bops["total"]}
+        """)
+    output_logger.info(msg)
 
     full_model_size = os.path.getsize(oto.full_group_sparse_model_path) / (1024**3)
     compressed_model_size = os.path.getsize(oto.compressed_model_path) / (1024**3)
     output_logger.info(f"Size of full/ model: {full_model_size:.4f} GB")
     output_logger.info(f"Size of compressed model: {compressed_model_size:.4f} GB")
 
-    wandb.log(
-        {
-            "MAC_reduction": (1.0 - compressed_macs["total"] / full_macs["total"])
-            * 100,
-            "BOP_reduction": (1.0 - compressed_bops["total"] / full_bops["total"])
-            * 100,
-            "Param_reduction": (1.0 - compressed_num_params / full_num_params) * 100,
-            "MAC_ratio": full_macs["total"] / compressed_macs["total"],
-            "BOP_compression_ratio": full_bops["total"] / compressed_bops["total"],
-            "full_model_size": full_model_size,
-            "compressed_model_size": compressed_model_size,
-        }
-    )
+    if accelerator.is_main_process:
+        wandb.log(
+            {
+                "MAC_reduction": (1.0 - compressed_macs["total"] / full_macs["total"])
+                * 100,
+                "BOP_reduction": (1.0 - compressed_bops["total"] / full_bops["total"])
+                * 100,
+                "Param_reduction": (1.0 - compressed_num_params / full_num_params)
+                * 100,
+                "MAC_ratio": full_macs["total"] / compressed_macs["total"],
+                "BOP_compression_ratio": full_bops["total"] / compressed_bops["total"],
+                "full_model_size": full_model_size,
+                "compressed_model_size": compressed_model_size,
+            }
+        )
 
     # Print and visualize each layer bit width info
     param_dict = get_quant_param_dict(model)
@@ -760,29 +578,31 @@ def main(config: "Config"):
 
 
 class Config(BaseSettings, cli_parse_args=True):
-    model_name: Literal["resnet56", "resnet20", "vgg7bn"] = "resnet56"
+    model_name: Literal[
+        "resnet56", "resnet20", "vgg7bn", "vit", "deit", "pvt", "swin"
+    ] = "resnet56"
     dataset: Literal["cifar10", "imagenet"] = "cifar10"
     batch_size: int = 64
-    num_workers: int = 4
     epochs: int = 1
-    lr: float = 1e-1
-    lr_quant: float = 1e-3
+    lr: float = 1e-1  # 1e-3 for imagenet
+    lr_quant: float = 1e-3  # 1e-4 for imagenet
     weight_decay: float = 1e-4
-    sparsity: float = 0.4
-    projection_start_step: int = 10
+    sparsity: float = 0.4  # 0.3 for imagenet
+    projection_start_step: int = 10  # 5 for imagenet
     projection_periods: int = 5
-    pruning_start_step: int = 20
+    pruning_start_step: int = 20  # 10 for imagenet
     pruning_periods: int = 10
-    projection_steps: int = 10
-    pruning_steps: int = 30
+    projection_steps: int = 10  # 5 for imagenet
+    pruning_steps: int = 30  # 20 for imagenet
     lr_step: int = 100
     lr_gamma: float = 0.1
-    variant: str = "sgd"
+    variant: str = "sgd"  # adam for imagenet
     bit_reduction: int = 2
+    init_bit: int = 16
     min_bit_wt: int = 4
     max_bit_wt: int = 16
-    min_bit_act: int = 4
-    max_bit_act: int = 6
+    min_bit_act: int = 4  # 2 for imagenet
+    max_bit_act: int = 6  # 16 for imagenet
     mix_up: bool = False
     label_smooth: bool = False
     seed: int = 0
@@ -790,13 +610,17 @@ class Config(BaseSettings, cli_parse_args=True):
     output_dir: str | None = None
     data_dir: str | None = None
 
+    # Dataloader params
+    num_workers: int = 8
+    prefetch_factor: int = 2
+
 
 def get_config():
 
     config = Config()
 
     # scale lr wd with batch size
-    if config.batch_size != 64:
+    if config.batch_size != 64 and config.dataset == "cifar10":
         config.lr *= config.batch_size / 64
         config.weight_decay *= config.batch_size / 64
 

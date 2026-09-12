@@ -18,7 +18,6 @@ class OTO:
         skip_patterns=None,
         strict_out_nodes=False,
     ):
-        self._graph = None
         self._model = model
         self._dummy_input = dummy_input
         self._skip_patterns = skip_patterns

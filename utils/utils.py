@@ -1,3 +1,4 @@
+from accelerate import Accelerator
 import torch
 
 
@@ -16,6 +17,38 @@ def accuracy_topk(output, target, topk=(1,)):
         res.append(correct_k.mul_(100.0 / batch_size))
     return res
 
+def check_accuracy_hf(model, accelerator: Accelerator, testloader, two_input=False):
+    correct1 = torch.tensor(0.0, device=accelerator.device)
+    correct5 = torch.tensor(0.0, device=accelerator.device)
+    total = 0
+    model = model.eval()
+    with torch.no_grad():
+        for batch in testloader:
+            if isinstance(batch, dict):  # ImageNet format
+                X = batch["image"]
+                y = batch["labels"]
+            else:  # CIFAR10 format
+                X, y = batch
+
+            if two_input:
+                y_pred = model(X, X)
+            else:
+                y_pred = model(X)
+
+            total += y.size(0)
+
+            prec1, prec5 = accuracy_topk(y_pred, y, topk=(1, 5))
+
+            correct1 += prec1.detach() * y.size(0)
+            correct5 += prec5.detach() * y.size(0)
+
+    model = model.train()
+    correct1 = accelerator.reduce(correct1, reduction="sum")
+    correct5 = accelerator.reduce(correct5, reduction="sum")
+    total = accelerator.reduce(torch.tensor(total), reduction="sum")
+    accuracy1 = correct1 / total
+    accuracy5 = correct5 / total
+    return accuracy1, accuracy5
 
 def check_accuracy(model, testloader, two_input=False):
     correct1 = 0
