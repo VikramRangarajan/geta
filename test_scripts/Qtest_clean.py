@@ -121,10 +121,11 @@ def get_data_loader(
             transform=transform_test,
         )
         input_size = (1, 3, 32, 32)
-    elif dataset == "imagenet":
+    elif "imagenet" in dataset:
         input_size = (1, 3, 224, 224)
         transform_train = transforms.Compose(
             [
+                transforms.Lambda(lambda img: img.convert("RGB")),
                 transforms.RandomResizedCrop(224),
                 transforms.RandomHorizontalFlip(),
                 transforms.ColorJitter(
@@ -137,6 +138,7 @@ def get_data_loader(
 
         transform_test = transforms.Compose(
             [
+                transforms.Lambda(lambda img: img.convert("RGB")),
                 transforms.Resize(256),
                 transforms.CenterCrop(224),
                 transforms.ToTensor(),
@@ -146,15 +148,24 @@ def get_data_loader(
 
         def get_transform_fn(transforms):
             def apply_transforms(example):
+                images = [transforms(img) for img in example["image"]]
                 return {
-                    "image": transforms(example["image"]),
+                    "image": images,
                     "label": example["label"],
                 }
 
-        train = load_dataset("ILSVRC/imagenet-1k", split="train")
-        trainset = train.map(get_transform_fn(transform_train))
-        test = load_dataset("ILSVRC/imagenet-1k", split="test")
-        testset = test.map(get_transform_fn(transform_test))
+            return apply_transforms
+
+        hf_uri = (
+            "evanarlian/imagenet_1k_resized_256"
+            if "small" in dataset
+            else "ILSVRC/imagenet-1k"
+        )
+
+        train = load_dataset(hf_uri, split="train", keep_in_memory=True)
+        trainset = train.with_transform(get_transform_fn(transform_train))
+        test = load_dataset(hf_uri, split="test", keep_in_memory=True)
+        testset = test.with_transform(get_transform_fn(transform_test))
     else:
         raise ValueError("Unsupported dataset")
 
@@ -260,7 +271,7 @@ def main(config: "Config"):
         dynamic=False,
     )
     accelerator = Accelerator(dynamo_plugin=dynamo_plugin)
-    wandb.init(config=config.model_dump())
+    wandb.init(config=config.model_dump(), name=config.ablation)
 
     # Messaging logger
     output_dir = resolve_output_dir(
@@ -292,6 +303,10 @@ def main(config: "Config"):
         model = vgg7_bn(num_classes=num_classes)
     elif config.model_name == "resnet20":
         model = resnet20_cifar10()
+    elif config.model_name == "resnet50":
+        from torchvision.models import resnet50
+
+        model = resnet50()
     elif config.model_name == "resnet56":
         model = resnet56_cifar10()
     elif config.model_name == "vit":
@@ -335,35 +350,32 @@ def main(config: "Config"):
     # oto.visualize(view=False, out_dir='./cache', display_flops=True, display_params=True, display_macs=True)
     # exit()
 
-    if config.ablation == "qhesso":
-        pruning_periods = config.pruning_periods
-        total_pruning_steps = 0
-        if config.pruning_steps == 0:
-            total_pruning_steps = 1
-            pruning_periods = 1
-        else:
-            total_pruning_steps = config.pruning_steps * len(train_loader)
-        optimizer = oto.geta(
-            variant=config.variant,
-            lr=config.lr,
-            lr_quant=config.lr_quant,
-            first_momentum=0.9,
-            weight_decay=config.weight_decay,
-            target_group_sparsity=config.sparsity,
-            start_projection_step=config.projection_start_step * len(train_loader),
-            projection_periods=config.projection_periods,
-            projection_steps=config.projection_steps * len(train_loader),
-            start_pruning_step=config.pruning_start_step * len(train_loader),
-            pruning_periods=pruning_periods,
-            pruning_steps=total_pruning_steps,  # pruning_steps * len(train_loader),
-            bit_reduction=config.bit_reduction,
-            min_bit_wt=config.min_bit_wt,
-            max_bit_wt=config.max_bit_wt,
-            min_bit_act=config.min_bit_act,
-            max_bit_act=config.max_bit_act,
-        )
+    pruning_periods = config.pruning_periods
+    total_pruning_steps = 0
+    if config.pruning_steps == 0:
+        total_pruning_steps = 1
+        pruning_periods = 1
     else:
-        raise NotImplementedError()
+        total_pruning_steps = config.pruning_steps * len(train_loader)
+    optimizer = oto.geta(
+        variant=config.variant,
+        lr=config.lr,
+        lr_quant=config.lr_quant,
+        first_momentum=0.9,
+        weight_decay=config.weight_decay,
+        target_group_sparsity=config.sparsity,
+        start_projection_step=config.projection_start_step * len(train_loader),
+        projection_periods=config.projection_periods,
+        projection_steps=config.projection_steps * len(train_loader),
+        start_pruning_step=config.pruning_start_step * len(train_loader),
+        pruning_periods=pruning_periods,
+        pruning_steps=total_pruning_steps,  # pruning_steps * len(train_loader),
+        bit_reduction=config.bit_reduction,
+        min_bit_wt=config.min_bit_wt,
+        max_bit_wt=config.max_bit_wt,
+        min_bit_act=config.min_bit_act,
+        max_bit_act=config.max_bit_act,
+    )
 
     # Get full/original floating-point model MACs, BOPs, and number of parameters
     full_macs = oto.compute_macs(in_million=True, layerwise=True)
@@ -402,15 +414,15 @@ def main(config: "Config"):
         os.environ.get("TRAINER_RESUME") == "1"
         or os.environ.get("SLURM_RESTART_COUNT", "0") != "0"
     ):
-        accelerator.load_state()
+        accelerator.load_state(os.path.join(checkpoint_dir, config.ablation))
     for epoch in range(state.start_epoch, config.epochs):
         running_loss = 0.0
         for batch_idx, batch in enumerate(
             tqdm(train_loader, desc=f"Epoch {epoch + 1}/{config.epochs}")
         ):
             with accelerator.accumulate(model):
-                if config.dataset == "imagenet":
-                    inputs, targets = batch["image"], batch["labels"]
+                if "imagenet" in config.dataset:
+                    inputs, targets = batch["image"], batch["label"]
                 else:
                     inputs, targets = batch
 
@@ -466,7 +478,7 @@ def main(config: "Config"):
             state.best_acc1 = accuracy1
             best_epoch = epoch
         # Save checkpoint for resume (every epoch)
-        accelerator.save_state(os.path.join(checkpoint_dir, wandb.run.id))
+        accelerator.save_state(os.path.join(checkpoint_dir, config.ablation))
 
     # Construct the subnet and get the compressed model
     if accelerator.is_main_process:
@@ -581,9 +593,9 @@ def main(config: "Config"):
 
 class Config(BaseSettings, cli_parse_args=True):
     model_name: Literal[
-        "resnet56", "resnet20", "vgg7bn", "vit", "deit", "pvt", "swin"
+        "resnet56", "resnet50", "resnet20", "vgg7bn", "vit", "deit", "pvt", "swin"
     ] = "resnet56"
-    dataset: Literal["cifar10", "imagenet"] = "cifar10"
+    dataset: Literal["cifar10", "imagenet", "imagenet_small"] = "cifar10"
     batch_size: int = 64
     epochs: int = 1
     lr: float = 1e-1  # 1e-3 for imagenet

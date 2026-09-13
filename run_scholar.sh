@@ -86,20 +86,24 @@ if [[ -z "${GETA_JOB:-}" ]]; then
     exit 2
 fi
 
-# Qtest_app.py is typer-based (single command: bare [OPTIONS], hyphenated flags);
-# argparse scripts take underscore flags. Default to argparse mode.
-IS_TYPER=0
-TYPER_SUBCMD=""
-
 case "${GETA_JOB}" in
     # Paper Table 2: ResNet20 on CIFAR10 (weight-only, SGD lr=0.1, 350 epochs)
-    resnet20-cifar10)
+    resnet20-cifar10-orig)
         SCRIPT="test_scripts/Qtest_resnet56_ablation.py"
         ARGS="--model_name resnet20 --dataset cifar10 --batch_size 64 --epochs 350 \
             --lr 0.1 --lr_quant 1e-4 --weight_decay 1e-4 --sparsity 0.35 \
             --projection_start_step 0 --projection_periods 7 --projection_steps 35 \
             --pruning_start_step 35 --pruning_periods 5 --pruning_steps 30 \
             --variant sgd --bit_reduction 2 --min_bit_wt 4 --max_bit_wt 16 --seed 0"
+        ;;
+    resnet20-cifar10)
+        SCRIPT="test_scripts/Qtest_clean.py"
+        ARGS="--model_name=resnet20 --dataset=cifar10 --batch_size=64 --epochs=350 \
+            --lr=0.1 --lr_quant=1e-4 --weight_decay=1e-4 --sparsity=0.35 \
+            --projection_start_step=0 --projection_periods=7 --projection_steps=35 \
+            --pruning_start_step=35 --pruning_periods=5 --pruning_steps=30 \
+            --variant=sgd --bit_reduction=2 --min_bit_wt=4 --max_bit_wt=16 --seed=0 \
+            --output_dir=outputs/table2 --data_dir=data/"
         ;;
     # Paper Table 4: VGG7 on CIFAR10 (weight+activation, Adam lr=1e-3, 200 epochs)
     vgg7-cifar10)
@@ -192,75 +196,6 @@ echo "workdir: ${WORK_DIR}"
 nvidia-smi --query-gpu=name,memory.total --format=csv 2>/dev/null || true
 
 cd "${WORK_DIR}"
-# shellcheck disable=SC2086
-if [[ "${IS_TYPER}" == "1" ]]; then
-    # Runtime-only workaround for the Qtest_app.py eval bug (no test_scripts
-    # edits): Qtest_app.py passes `device` as the 3rd positional arg of
-    # check_accuracy(model, loader, two_input=False), so eval calls
-    # model(X, X). ResNet forwards take (x) only -> TypeError; VGG7 takes
-    # (x, *args) so it survives. Pre-seed sys.modules['utils.utils'] via
-    # sitecustomize so the import in Qtest_app.py picks up a
-    # (model, loader, device=None) compatible wrapper. Training math untouched.
-    SHIM_DIR="${WORK_DIR}/qapp_shim"
-    mkdir -p "${SHIM_DIR}"
-    cat > "${SHIM_DIR}/sitecustomize.py" <<'PYEOF'
-import sys as _sys
-import types as _types
-
-
-def _install_qapp_check_accuracy():
-    try:
-        import torch as _torch
-    except Exception:
-        return
-
-    def check_accuracy(model, testloader, device=None, two_input=False):
-        # device may be a torch.device passed positionally by Qtest_app.py;
-        # it is NOT the two_input flag.
-        if isinstance(device, _torch.device):
-            pass
-        elif isinstance(device, bool):
-            two_input = device
-        model = model.eval()
-        dev = next(model.parameters()).device
-        c1 = c5 = tot = 0
-        with _torch.no_grad():
-            for batch in testloader:
-                if isinstance(batch, dict):
-                    X = batch["pixel_values"].to(dev)
-                    y = batch["labels"].to(dev)
-                else:
-                    X, y = batch
-                    X = X.to(dev)
-                    y = y.to(dev)
-                y_pred = model(X, X) if two_input else model(X)
-                tot += y.size(0)
-                _, pred = y_pred.topk(5, 1, True, True)
-                pred = pred.t()
-                corr = pred.eq(y.view(1, -1).expand_as(pred))
-                c1 += corr[:1].reshape(-1).float().sum().item() * 100.0 / y.size(0)
-                c5 += corr[:5].reshape(-1).float().sum().item() * 100.0 / y.size(0)
-        model = model.train()
-        return c1 / tot, c5 / tot
-
-    pkg = _types.ModuleType("utils")
-    pkg.__path__ = []
-    mod = _types.ModuleType("utils.utils")
-    mod.check_accuracy = check_accuracy
-    _sys.modules.setdefault("utils", pkg)
-    _sys.modules["utils.utils"] = mod
-
-
-_install_qapp_check_accuracy()
-PYEOF
-    export PYTHONPATH="${SHIM_DIR}${PYTHONPATH:+:${PYTHONPATH}}"
-    pixi --no-progress run --environment geta --manifest-path "${REPO_ROOT}/pixi.toml" \
-        python "${REPO_ROOT}/${SCRIPT}" ${TYPER_SUBCMD} ${ARGS} \
-        --output-dir "${OUT_DIR}" --data-dir "${DATA_DIR}" &
-else
-    pixi --no-progress run --environment geta --manifest-path "${REPO_ROOT}/pixi.toml" \
-        python "${REPO_ROOT}/${SCRIPT}" ${ARGS} \
-        --output_dir "${OUT_DIR}" --data_dir "${DATA_DIR}" &
-fi
+uv run python "${REPO_ROOT}/${SCRIPT}" ${ARGS} --output_dir "${OUT_DIR}" --data_dir "${DATA_DIR}" &
 wait $!
 echo "=== GETA job '${GETA_JOB}' finished at $(date) ==="
