@@ -690,7 +690,7 @@ class GETA(BaseHybridSparseOptimizer):
                 if layer_name in p_name and "d_quant_act" in p_name:
                     d_quant_min = self._d_quant_helper(max_bit, q_m_act, t_quant_act)
                     d_quant_max = self._d_quant_helper(min_bit, q_m_act, t_quant_act)
-                    p.data = torch.clip(p.data, min=d_quant_min, max=d_quant_max)
+                    p.data.clamp_(min=d_quant_min, max=d_quant_max)
 
     def partial_projected_gradient_descent_step_fix(self, param_group, bit_dict):
         for p_name, p in zip(param_group["p_names"], param_group["params"]):
@@ -737,11 +737,11 @@ class GETA(BaseHybridSparseOptimizer):
                 if layer_name in p_name and "d_quant_wt" in p_name:
                     bit_width = bit_dict[layer_name]["weight"]
                     d_quant_wt = self._d_quant_helper(bit_width, q_m_wt, t_quant_wt)
-                    p.data = torch.clip(p.data, min=d_quant_wt, max=d_quant_wt)
+                    p.data.clamp_(min=d_quant_wt, max=d_quant_wt)
                 if layer_name in p_name and "d_quant_act" in p_name:
                     bit_width = bit_dict[layer_name]["activation"]
                     d_quant_act = self._d_quant_helper(bit_width, q_m_act, t_quant_act)
-                    p.data = torch.clip(p.data, min=d_quant_act, max=d_quant_act)
+                    p.data.clamp_(min=d_quant_act, max=d_quant_act)
 
     @staticmethod
     def _bit_width_helper(d_quant=None, q_m=None, t_quant=None):
