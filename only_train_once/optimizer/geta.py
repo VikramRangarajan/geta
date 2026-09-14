@@ -314,7 +314,7 @@ class GETA(BaseHybridSparseOptimizer):
                         t_quant = p.data
                     if "q_m_wt" in p_name:
                         q_m = p.data
-                        qm_list.append(q_m.reshape(()))
+                        qm_list.append(q_m.reshape((1,)))
                     if "weight" in p_name:
                         weight = p.data
             for p_name, p, p_transform in zip(
