@@ -103,7 +103,7 @@ case "${GETA_JOB}" in
             --projection_start_step=0 --projection_periods=7 --projection_steps=35 \
             --pruning_start_step=35 --pruning_periods=5 --pruning_steps=30 \
             --variant=sgd --bit_reduction=2 --min_bit_wt=4 --max_bit_wt=16 --seed=0 \
-            --output_dir=outputs/table2 --data_dir=data/"
+            --output_dir=outputs/table2 --data_dir=data/ --ablation=resnet20-cifar10-bf16"
         ;;
     # Paper Table 4: VGG7 on CIFAR10 (weight+activation, Adam lr=1e-3, 200 epochs)
     vgg7-cifar10)
@@ -196,6 +196,6 @@ echo "workdir: ${WORK_DIR}"
 nvidia-smi --query-gpu=name,memory.total --format=csv 2>/dev/null || true
 
 cd "${WORK_DIR}"
-uv run python "${REPO_ROOT}/${SCRIPT}" ${ARGS} --output_dir "${OUT_DIR}" --data_dir "${DATA_DIR}" &
+uv run accelerate launch "${REPO_ROOT}/${SCRIPT}" ${ARGS} --output_dir "${OUT_DIR}" --data_dir "${DATA_DIR}" &
 wait $!
 echo "=== GETA job '${GETA_JOB}' finished at $(date) ==="
