@@ -18,12 +18,11 @@
 #   simplevit-cifar10, vit-imagenet, deit-imagenet, swin-imagenet
 
 #SBATCH -n 1
-#SBATCH -c 16
-#SBATCH -t 4:00:00
-#SBATCH -q standby
-#SBATCH -p a10
-#SBATCH --constraint=J
-#SBATCH --mem=128G
+#SBATCH -c 32
+#SBATCH -t 72:00:00
+#SBATCH -q normal
+#SBATCH -p a100-80gb
+#SBATCH --mem=256G
 #SBATCH --gres=gpu:1
 #SBATCH --signal=B:TERM@300
 #SBATCH --job-name=geta
@@ -95,6 +94,26 @@ case "${GETA_JOB}" in
             --pruning_start_step 20 --pruning_periods 10 --pruning_steps 30 \
             --variant adam --bit_reduction 2 --min_bit 4 --max_bit 16 --seed 0"
         ;;
+        # ResNet50 on ImageNet-1k, 40% sparsity
+        resnet50-imagenet-40sp)
+            SCRIPT="test_scripts/Qtest_clean.py"
+            ARGS="--model_name=resnet50 --dataset=imagenet --batch_size=64 --epochs=120 \
+                --lr=1e-3 --lr_quant=1e-4 --weight_decay=1e-4 --sparsity=0.4 \
+                --projection_start_step=5 --projection_periods=5 --projection_steps=5 \
+                --pruning_start_step=10 --pruning_periods=10 --pruning_steps=10 \
+                --variant=adamw --bit_reduction=2 --min_bit_wt=4 --max_bit_wt=16 --seed=0 \
+                --output_dir=outputs/table5_40 --data_dir=data/ --ablation resnet50-imagenet-40sp"
+            ;;
+        # ResNet50 on ImageNet-1k, 50% sparsity
+        resnet50-imagenet-50sp)
+            SCRIPT="test_scripts/Qtest_clean.py"
+            ARGS="--model_name=resnet50 --dataset=imagenet --batch_size=64 --epochs=120 \
+                --lr=1e-3 --lr_quant=1e-4 --weight_decay=1e-4 --sparsity=0.5 \
+                --projection_start_step=5 --projection_periods=5 --projection_steps=5 \
+                --pruning_start_step=10 --pruning_periods=10 --pruning_steps=10 \
+                --variant=adamw --bit_reduction=2 --min_bit_wt=4 --max_bit_wt=16 --seed=0 \
+                --output_dir=outputs/table5_50 --data_dir=data/ --ablation resnet50-imagenet-50sp"
+            ;;
     # Paper Fig 4 ablation: ResNet56 CIFAR10 from scratch (Fig4a 94.61%, Fig4b sparsity sweep) — ResNet family schedule like Tab7 ResNet20
     resnet56-cifar10)
         SCRIPT="test_scripts/Qtest_resnet56_ablation.py"
@@ -148,8 +167,4 @@ nvidia-smi --query-gpu=name,memory.total --format=csv 2>/dev/null || true
 
 cd "${WORK_DIR}"
 # shellcheck disable=SC2086
-pixi --no-progress run --environment geta --manifest-path "${REPO_ROOT}/pixi.toml" \
-    python "${REPO_ROOT}/${SCRIPT}" ${ARGS} \
-    --output_dir "${OUT_DIR}" --data_dir "${DATA_DIR}" &
-wait $!
-echo "=== GETA job '${GETA_JOB}' finished at $(date) ==="
+uv run accelerate launch --mixed_precision=bf16 "${REPO_ROOT}/${SCRIPT}" ${ARGS}
