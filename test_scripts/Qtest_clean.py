@@ -108,6 +108,11 @@ def get_data_loader(
                 ),
             ]
         )
+        # Faster mirror, see https://github.com/callummcdougall/ARENA_3.0/issues/359
+        # md5 is checked so no need to worry, will raise error if corrupted
+        CIFAR10.url = (
+            "https://data.brainchip.com/dataset-mirror/cifar10/cifar-10-python.tar.gz"
+        )
         trainset = CIFAR10(
             root=os.path.join(data_dir, "cifar10"),
             train=True,
@@ -266,7 +271,7 @@ class TrainingState(BaseModel):
 def main(config: "Config"):
     dynamo_plugin = TorchDynamoPlugin(
         backend="inductor",  # Options: "inductor", "aot_eager", "aot_nvfuser", etc.
-        mode="default",  # Options: "default", "reduce-overhead", "max-autotune"
+        mode="reduce-overhead",  # Options: "default", "reduce-overhead", "max-autotune"
         fullgraph=True,
         dynamic=False,
     )
@@ -359,7 +364,7 @@ def main(config: "Config"):
         total_pruning_steps = config.pruning_steps * len(train_loader)
     optimizer = oto.geta(
         variant=config.variant,
-        lr=config.lr,
+        lr=torch.tensor(config.lr),
         lr_quant=config.lr_quant,
         first_momentum=0.9,
         weight_decay=config.weight_decay,
@@ -476,13 +481,15 @@ def main(config: "Config"):
             )
         if accuracy1 > state.best_acc1:
             state.best_acc1 = accuracy1
-            best_epoch = epoch
+            state.best_epoch = epoch
         # Save checkpoint for resume (every epoch)
         accelerator.save_state(os.path.join(checkpoint_dir, config.ablation))
 
     # Construct the subnet and get the compressed model
     if accelerator.is_main_process:
-        output_logger.info(f"Best epoch: {best_epoch}. Best acc1: {state.best_acc1}%")
+        output_logger.info(
+            f"Best epoch: {state.best_epoch}. Best acc1: {state.best_acc1}%"
+        )
         output_logger.info("Training completed. Constructing subnet...")
         oto.construct_subnet(out_dir=os.path.join(output_dir, "subnet"))
         compressed_model = torch.load(oto.compressed_model_path)

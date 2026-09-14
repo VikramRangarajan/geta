@@ -1,8 +1,8 @@
-from typing import TYPE_CHECKING
 import logging
 import math
 import os
 from contextlib import contextmanager
+from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
@@ -314,7 +314,7 @@ class GETA(BaseHybridSparseOptimizer):
                         t_quant = p.data
                     if "q_m_wt" in p_name:
                         q_m = p.data
-                        qm_list.append(q_m.item())
+                        qm_list.append(q_m.reshape(()))
                     if "weight" in p_name:
                         weight = p.data
             for p_name, p, p_transform in zip(
@@ -450,12 +450,9 @@ class GETA(BaseHybridSparseOptimizer):
         # Determine d_quant range
         bit_width_lower = bit_range[0]
         bit_width_upper = bit_range[1]
-        d_quant_upper = self._d_quant_helper(
-            bit_width_lower, max(np.abs(qm_list)), t_quant
-        )
-        d_quant_lower = self._d_quant_helper(
-            bit_width_upper, max(np.abs(qm_list)), t_quant
-        )
+        all_qms = torch.cat(qm_list, dim=0)
+        d_quant_upper = self._d_quant_helper(bit_width_lower, all_qms, t_quant)
+        d_quant_lower = self._d_quant_helper(bit_width_upper, all_qms, t_quant)
 
         # Safeguard mechanism for d_quant
         if cosine_similarity_res >= 0.0 or forget_rate == 0.0:
@@ -633,12 +630,6 @@ class GETA(BaseHybridSparseOptimizer):
             d_quant_min = self._d_quant_helper(self.max_bit_wt, q_m_wt, t_quant_wt)
             d_quant_max = self._d_quant_helper(self.min_bit_wt, q_m_wt, t_quant_wt)
 
-            # Convert bounds to scalars if they're tensors
-            if isinstance(d_quant_min, torch.Tensor):
-                d_quant_min = float(d_quant_min.item())
-            if isinstance(d_quant_max, torch.Tensor):
-                d_quant_max = float(d_quant_max.item())
-
             # Apply bounds to d_quant parameters
             for p_name, p in zip(param_group["p_names"], param_group["params"]):
                 if layer_name in p_name and "d_quant_wt" in p_name:
@@ -772,16 +763,12 @@ class GETA(BaseHybridSparseOptimizer):
             t_quant = 1.0
 
         # Get maximum absolute value if q_m is a tensor
-        if isinstance(q_m, torch.Tensor):
-            q_m = torch.max(torch.abs(q_m)).item()
-        else:
-            q_m = abs(q_m)
-        # Prevent exact zero
-        q_m = max(abs(q_m), 1e-10)
+        assert isinstance(q_m, torch.Tensor)
+        q_m = torch.max(torch.abs(q_m)).clamp(min=1e-10)
 
         # Calculate d_quant using scalar math
         # d_quant = math.exp(t_quant * math.log(q_m)) / (2 ** (bit_width - 1) - 1)
-        d_quant = math.exp(t_quant * math.log(abs(q_m))) / (2 ** (bit_width - 1) - 1)
+        d_quant = torch.exp(t_quant * torch.log(q_m)) / (2 ** (bit_width - 1) - 1)
         return d_quant
 
     @staticmethod
@@ -864,7 +851,10 @@ class GETA(BaseHybridSparseOptimizer):
 
         self.num_steps += 1
         self.compute_grad_variant()
+        self._step(loss)
 
+    # @torch.compile(fullgraph=False)
+    def _step(self, loss=None):
         # Determine the bit range projection for weights
         if (
             self.num_steps >= self.start_projection_step

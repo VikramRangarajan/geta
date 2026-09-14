@@ -27,7 +27,7 @@ def check_accuracy_hf(model, accelerator: Accelerator, testloader, two_input=Fal
         for batch in testloader:
             if isinstance(batch, dict):  # ImageNet format
                 X = batch["image"]
-                y = batch["labels"]
+                y = batch["label"]
             else:  # CIFAR10 format
                 X, y = batch
 
