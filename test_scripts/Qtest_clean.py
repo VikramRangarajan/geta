@@ -372,7 +372,7 @@ def main(config: "Config"):
         total_pruning_steps = config.pruning_steps * len(train_loader)
     optimizer = oto.geta(
         variant=config.variant,
-        lr=torch.tensor(config.lr),
+        lr=torch.tensor(config.lr, device=accelerator.device),
         lr_quant=config.lr_quant,
         first_momentum=0.9,
         weight_decay=config.weight_decay,
@@ -422,6 +422,8 @@ def main(config: "Config"):
         model, optimizer, train_loader, test_loader, lr_scheduler
     )
 
+    from torch.profiler import profile, schedule, ProfilerActivity, record_function
+
     # Checkpoint resume: check TRAINER_RESUME / SLURM_RESTART_COUNT or existing checkpoint
     if (
         os.environ.get("TRAINER_RESUME") == "1"
@@ -430,40 +432,53 @@ def main(config: "Config"):
         accelerator.load_state(os.path.join(checkpoint_dir, config.ablation))
     for epoch in range(state.start_epoch, config.epochs):
         running_loss = 0.0
-        for batch_idx, batch in enumerate(
-            tqdm(train_loader, desc=f"Epoch {epoch + 1}/{config.epochs}")
-        ):
-            with accelerator.accumulate(model):
-                if "imagenet" in config.dataset:
-                    inputs, targets = batch["image"], batch["label"]
-                else:
-                    inputs, targets = batch
+        sched = schedule(wait=10, skip_first=10, warmup=10, active=10, repeat=1)
+        with profile(
+            activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+            schedule=sched,
+            record_shapes=True,
+        ) as prof:
+            for batch_idx, batch in enumerate(
+                tqdm(train_loader, desc=f"Epoch {epoch + 1}/{config.epochs}")
+            ):
+                with accelerator.accumulate(model):
+                    if "imagenet" in config.dataset:
+                        inputs, targets = batch["image"], batch["label"]
+                    else:
+                        inputs, targets = batch
 
-                with torch.no_grad():
-                    if config.label_smooth and not config.mix_up:
-                        targets = one_hot(
-                            targets, num_classes=num_classes, smoothing_eps=0.1
-                        )
-                    if not config.label_smooth and config.mix_up:
-                        targets = one_hot(targets, num_classes=num_classes)
-                        inputs, targets = mixup_func(inputs, targets)
-                    if config.mix_up and config.label_smooth:
-                        targets = one_hot(
-                            targets, num_classes=num_classes, smoothing_eps=0.1
-                        )
-                        inputs, targets = mixup_func(inputs, targets)
+                    with torch.no_grad():
+                        if config.label_smooth and not config.mix_up:
+                            targets = one_hot(
+                                targets, num_classes=num_classes, smoothing_eps=0.1
+                            )
+                        if not config.label_smooth and config.mix_up:
+                            targets = one_hot(targets, num_classes=num_classes)
+                            inputs, targets = mixup_func(inputs, targets)
+                        if config.mix_up and config.label_smooth:
+                            targets = one_hot(
+                                targets, num_classes=num_classes, smoothing_eps=0.1
+                            )
+                            inputs, targets = mixup_func(inputs, targets)
 
-                with accelerator.autocast():
-                    outputs = model(inputs)
-                    loss = criterion(outputs, targets)
-                accelerator.backward(loss)
-                if accelerator.sync_gradients:
-                    accelerator.clip_grad_value_(model.parameters(), 1.0)
-                optimizer.step()
-                lr_scheduler.step()
-                optimizer.zero_grad()
-                with torch.no_grad():
-                    running_loss += loss.detach()
+                    with accelerator.autocast(), record_function("optimizer_step"):
+                        outputs = model(inputs)
+                        loss = criterion(outputs, targets)
+                    with record_function("backward"):
+                        accelerator.backward(loss)
+                    with record_function("clip_grad"):
+                        if accelerator.sync_gradients:
+                            accelerator.clip_grad_value_(model.parameters(), 1.0)
+                    with record_function("optimizer_step"):
+                        optimizer.step()
+                    lr_scheduler.step()
+                    optimizer.zero_grad()
+                    with torch.no_grad():
+                        running_loss += loss.detach()
+                    prof.step()
+                if batch_idx >= 50:
+                    break
+        prof.export_chrome_trace(f"trace{epoch}.json")
         running_loss = running_loss.item()
         opt_metrics = optimizer.optimizer.compute_metrics()
         running_loss_avg = running_loss / len(train_loader)

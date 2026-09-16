@@ -7,12 +7,6 @@ import torch
 from torch import nn
 
 
-class NanInGradientError(Exception):
-    def __init__(self, message):
-        self.message = message
-        super().__init__(self.message)
-
-
 # submodule level logger
 logger = logging.getLogger(__name__)
 
@@ -48,14 +42,6 @@ class SymQuantizerNonLinear(torch.autograd.Function):
         q_s: torch.Tensor,
     ) -> torch.Tensor:
         input_abs = torch.abs(input)
-        device = input.device
-
-        # Ensure all tensors are on the same device
-        d_quant = d_quant.to(device)
-        q_m = q_m.to(device)
-        t_quant = t_quant.to(device)
-        clip_val = clip_val.to(device)
-        q_s = q_s.to(device)
         ctx.save_for_backward(input, d_quant, q_m, t_quant, clip_val, q_s)
 
         # q_m <= q_s can happen
@@ -71,7 +57,6 @@ class SymQuantizerNonLinear(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output) -> tuple[torch.Tensor]:
         input, d_quant, q_m, t_quant, clip_val, q_s = ctx.saved_tensors
-        device = input.device
         input_abs = torch.abs(input)
 
         grad_x = grad_output.clone()
@@ -92,17 +77,17 @@ class SymQuantizerNonLinear(torch.autograd.Function):
         ) - range_pow.div(d_quant)
         grad_d_xq[input_abs <= q_s] = 0
         grad_d_xq = torch.sign(input) * grad_d_xq
-        grad_d = torch.tensor([torch.sum(grad_output * grad_d_xq)], device=device)
+        grad_d = torch.sum(grad_output * grad_d_xq).reshape(1)
 
         grad_qm_xq = torch.sign(input) * ((t_quant * range_pow_low).expand_as(input))
         grad_qm_xq[input_abs <= q_m] = 0
-        grad_qm = torch.tensor([torch.sum(grad_output * grad_qm_xq)], device=device)
+        grad_qm = torch.sum(grad_output * grad_qm_xq).reshape(1)
 
         grad_t_xq = input_pow * (torch.log(input_abs - q_s))
         grad_t_xq[input_abs >= q_m] = range_pow * torch.log(torch.abs(q_m - q_s) + 1e-6)
         grad_t_xq[input_abs <= q_s] = 0
         grad_t_xq = torch.sign(input) * grad_t_xq
-        grad_t = torch.tensor([torch.sum(grad_output * grad_t_xq)], device=device)
+        grad_t = torch.sum(grad_output * grad_t_xq).reshape(1)
         return grad_x, grad_d, grad_qm, grad_t, None, None
 
 
@@ -123,13 +108,7 @@ class SymQuantizerLinear(torch.autograd.Function):
         clip_val: torch.Tensor,
         q_s: torch.Tensor,
     ) -> torch.Tensor:
-        device = input.device
         input_abs = torch.abs(input)
-        # Ensure all tensors are on the same device
-        d_quant = d_quant.to(device)
-        q_m = q_m.to(device)
-        clip_val = clip_val.to(device)
-        q_s = q_s.to(device)
         ctx.save_for_backward(input, d_quant, q_m, clip_val, q_s)
 
         range_pow = torch.abs(q_m - q_s)
@@ -144,7 +123,6 @@ class SymQuantizerLinear(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output) -> tuple[torch.Tensor]:
         input, d_quant, q_m, clip_val, q_s = ctx.saved_tensors
-        device = input.device
         input_abs = torch.abs(input)
 
         grad_x = grad_output.clone()
@@ -161,28 +139,12 @@ class SymQuantizerLinear(torch.autograd.Function):
         ) - range_pow.div(d_quant)
         grad_d_xq[input_abs <= q_s] = 0
         grad_d_xq = torch.sign(input) * grad_d_xq
-        grad_d = torch.tensor([torch.sum(grad_output * grad_d_xq)], device=device)
+        grad_d = torch.sum(grad_output * grad_d_xq).reshape(1)
 
         grad_qm_xq = torch.sign(input)
         grad_qm_xq[input_abs <= q_m] = 0
-        grad_qm = torch.tensor([torch.sum(grad_output * grad_qm_xq)], device=device)
+        grad_qm = torch.sum(grad_output * grad_qm_xq).reshape(1)
 
-        # NaN detection
-        if torch.allclose(
-            torch.tensor([torch.sum(grad_output * grad_d_xq)], device=device),
-            torch.tensor([float("nan")], device=device),
-            equal_nan=True,
-        ):
-            error_message = (
-                f"Error: NaN appears in gradient!\n"
-                f"d: {d_quant.item():.5f}, q_m: {q_m.item():.5f}, q_s: {q_s.item():.5f}\n"
-                f"input_abs-max: {torch.max(input_abs).item():.5f}, grad_output-max: {torch.max(grad_output).item():.5f},\n"
-                f"input_pow: {torch.min(input_pow)}, range_pow: {range_pow}, input_abs-min: {torch.min(input_abs)}\n"
-                f"grad_x: min={torch.min(grad_x):.5f}, max={torch.max(grad_x):.5f}, mean={torch.mean(grad_x):.5f}, std={torch.std(grad_x):.5f}\n"
-                f"grad_d: {grad_d.item():.5f}\n"
-                f"grad_qm: {grad_qm.item():.5f}\n"
-            )
-            raise NanInGradientError(error_message)
         return grad_x, grad_d, grad_qm, None, None
 
 
@@ -205,17 +167,10 @@ class DGEQuantizer(torch.autograd.Function):
         q_s: torch.Tensor,
         num_bits: torch.Tensor,  # Current target bit width
     ) -> torch.Tensor:
-        device = input.device
         input_abs = torch.abs(input)
 
-        # Move tensors to device
-        d_quant = d_quant.to(device)
-        q_m = q_m.to(device)
-        clip_val = clip_val.to(device)
-        q_s = q_s.to(device)
-
         # Scale k relative to paper's k=5 for 4-bit
-        k = torch.tensor(5.0 * (4.0 / num_bits)).to(device)
+        k = 5.0 * (4.0 / num_bits)
         ctx.save_for_backward(input, d_quant, q_m, k, clip_val, q_s)
 
         range_pow = torch.abs(q_m - q_s)
@@ -230,7 +185,6 @@ class DGEQuantizer(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output) -> tuple[torch.Tensor]:
         input, d_quant, q_m, k, clip_val, q_s = ctx.saved_tensors
-        device = input.device
         input_abs = torch.abs(input)
 
         # Zero gradients outside clipping range
@@ -255,21 +209,12 @@ class DGEQuantizer(torch.autograd.Function):
         ) - range_pow.div(d_quant)
         grad_d_xq[input_abs <= q_s] = 0
         grad_d_xq = torch.sign(input) * grad_d_xq
-        grad_d = torch.tensor([torch.sum(grad_output * grad_d_xq)], device=device)
+        grad_d = torch.sum(grad_output * grad_d_xq).reshape(1)
 
         # Compute q_m gradient
         grad_qm_xq = torch.sign(input)
         grad_qm_xq[input_abs <= q_m] = 0
-        grad_qm = torch.tensor([torch.sum(grad_output * grad_qm_xq)], device=device)
-
-        if torch.isnan(grad_x).any():
-            raise NanInGradientError(
-                f"NaN in gradient computation\n"
-                f"input range: [{input.min():.4f}, {input.max():.4f}]\n"
-                f"d_quant: {d_quant.item():.4f}\n"
-                f"q_m: {q_m.item():.4f}\n"
-                f"k: {k.item():.4f}"
-            )
+        grad_qm = torch.sum(grad_output * grad_qm_xq).reshape(1)
 
         return grad_x, grad_d, grad_qm, None, None, None
 
@@ -311,12 +256,9 @@ class QuantizeMixin:
 
         self.quant_type = quant_type
         self.quant_mode = quant_mode
-        self.weight_clip_val: torch.Tensor
-        self.act_clip_val: torch.Tensor
-        self.q_s: torch.Tensor
-        self.register_buffer("weight_clip_val", torch.tensor(weight_clip_val))
-        self.register_buffer("act_clip_val", torch.tensor(act_clip_val))
-        self.register_buffer("q_s", torch.tensor(0.0))
+        self.weight_clip_val = weight_clip_val
+        self.act_clip_val = act_clip_val
+        self.q_s = 0.0
 
     def quantize_weight(self, weight: torch.tensor) -> torch.Tensor:
         """Quantize the weight tensor."""

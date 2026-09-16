@@ -379,13 +379,13 @@ class GETA(BaseHybridSparseOptimizer):
         eps = 1e-8
         cosine_similarity_clip = torch.div(
             torch.dot(flatten_clip, flatten_grad),
-            torch.max(flatten_clip_norm, torch.tensor(eps, device=flatten_clip.device))
-            * flatten_grad_norm,
+            flatten_clip_norm.clamp(min=eps)
+            * flatten_grad_norm
         )
         cosine_similarity_res = torch.div(
             torch.dot(flatten_res, flatten_grad),
-            torch.max(flatten_res_norm, torch.tensor(eps, device=flatten_res.device))
-            * flatten_grad_norm,
+            flatten_res_norm.clamp(min=eps)
+            * flatten_grad_norm
         )
 
         eta = 0.999
@@ -783,7 +783,7 @@ class GETA(BaseHybridSparseOptimizer):
         self.compute_grad_variant()
         self._step(loss)
 
-    # @torch.compile(fullgraph=False)
+    @torch.compile(fullgraph=False)
     def _step(self, loss=None):
         # Determine the bit range projection for weights
         if (

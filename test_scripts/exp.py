@@ -39,7 +39,7 @@ SCHOLAR_PREFIX = """#!/bin/bash
 #SBATCH --output=logs/%x-%j.out
 
 cd {PROJECT_ROOT}
-uv run accelerate launch {ACCELERATE_ARGS} test_scripts/Qtest_clean.py {ARGS}
+TORCH_LOGS="graph_breaks,recompiles" uv run accelerate launch {ACCELERATE_ARGS} test_scripts/Qtest_clean.py {ARGS}
 """
 
 scholar_gpus = {"V100": "G", "A30": "H", "A40": "J"}
@@ -102,6 +102,7 @@ def submit_job(
     if isinstance(flags, dict):
         flags = dict_to_flags(flags)
     constraint = None
+    partition = None
 
     if exp_settings.cluster == "scholar":
         constraint = scholar_gpus[exp_settings.gpu.upper()]
@@ -145,17 +146,17 @@ def resnet20_cifar10_baseline():
         model_name="resnet20",
         dataset="cifar10",
         batch_size=64,
-        epochs=350,
+        epochs=12,
         lr=1e-1,
         lr_quant=1e-4,
         weight_decay=1e-4,
         sparsity=0.35,
-        projection_start_step=0,
-        projection_periods=7,
-        projection_steps=35,
-        pruning_start_step=35,
-        pruning_periods=5,
-        pruning_steps=30,
+        projection_start_step=3,
+        projection_periods=1,
+        projection_steps=3,
+        pruning_start_step=6,
+        pruning_periods=1,
+        pruning_steps=3,
         variant="sgd",
         bit_reduction=2,
         min_bit_wt=4,
