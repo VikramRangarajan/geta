@@ -207,6 +207,7 @@ def resnet50_imagenet():
             dict_to_flags(cfg.model_dump()),
             exp_name,
             accelerate_args="--mixed_precision=bf16",
+            hours=72,
         )
 
 
