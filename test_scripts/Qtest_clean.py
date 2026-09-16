@@ -6,6 +6,7 @@ import os
 from textwrap import dedent
 from dataclasses import asdict
 import logging
+import random
 from test_scripts.config import Config
 
 import numpy as np
@@ -33,6 +34,13 @@ from utils.utils import check_accuracy_hf
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 output_logger = logging.getLogger(__name__)
 
+def setup(config: Config):
+    random.seed(config.seed)
+    np.random.seed(config.seed)
+    torch.manual_seed(config.seed)
+    torch.cuda.manual_seed_all(config.seed)
+    torch.set_float32_matmul_precision("high")
+    torch.backends.cudnn.benchmark = True
 
 def get_quant_param_dict(model):
     # Access quantization parameter information
@@ -290,7 +298,7 @@ def main(config: "Config"):
     # Setup info
     output_logger.info(config.model_dump_json(indent=2))
 
-    torch.manual_seed(config.seed)
+    setup(config)
     device = accelerator.device
 
     train_loader, test_loader, input_size = get_data_loader(
