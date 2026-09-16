@@ -1,30 +1,29 @@
-from datasets import load_dataset
-from pydantic import BaseModel
 import json
+import logging
 import math
 import os
-from textwrap import dedent
-from dataclasses import asdict
-import logging
 import random
-from test_scripts.config import Config
+from dataclasses import asdict
+from textwrap import dedent
 
 import numpy as np
 import torch
 import torch.nn.functional as F
-import wandb
-
+from accelerate import Accelerator
+from accelerate.utils import TorchDynamoPlugin
+from datasets import load_dataset
+from pydantic import BaseModel
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from torchvision.datasets import CIFAR10
 from tqdm import tqdm
-from accelerate import Accelerator
-from accelerate.utils import TorchDynamoPlugin
 
+import wandb
 from only_train_once import OTO
 from only_train_once.quantization.quant_model import model_to_quantize_model
 from sanity_check.backends.resnet20_cifar10 import resnet20_cifar10, resnet56_cifar10
 from sanity_check.backends.vgg7 import vgg7_bn
+from test_scripts.config import Config
 from test_scripts.geta_common import (
     resolve_data_dir,
     resolve_output_dir,
@@ -34,6 +33,7 @@ from utils.utils import check_accuracy_hf
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 output_logger = logging.getLogger(__name__)
 
+
 def setup(config: Config):
     random.seed(config.seed)
     np.random.seed(config.seed)
@@ -41,6 +41,7 @@ def setup(config: Config):
     torch.cuda.manual_seed_all(config.seed)
     torch.set_float32_matmul_precision("high")
     torch.backends.cudnn.benchmark = True
+
 
 def get_quant_param_dict(model):
     # Access quantization parameter information
@@ -60,7 +61,7 @@ def get_quant_param_dict(model):
 def get_bitwidth_dict(param_dict):
     bit_dict = {}
 
-    for key in param_dict.keys():
+    for key in param_dict:
         bit_dict[key] = {}
 
         d_quant_wt = param_dict[key]["d_quant_wt"]

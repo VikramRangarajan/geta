@@ -1,13 +1,12 @@
-import os
-import sys
+from collections.abc import Callable
 from pathlib import Path
 from subprocess import run
 from tempfile import NamedTemporaryFile
-from pydantic_settings import BaseSettings
-from typing import Callable
-from test_scripts.config import Config
 
 import dotenv
+from pydantic_settings import BaseSettings
+
+from test_scripts.config import Config
 
 dotenv.load_dotenv()
 
@@ -111,7 +110,9 @@ def submit_job(
         qos = "normal" if hours > 4 else "standby"
         if exp_settings.gpu.lower() not in ("a100", "a10", "a100-80gb"):
             raise ValueError(f"Invalid GPU: {exp_settings.gpu}")
-        partition = {"a100": "a100-80gb", "a100-80gb": "a100-80gb", "a10": "a10"}[exp_settings.gpu.lower()]
+        partition = {"a100": "a100-80gb", "a100-80gb": "a100-80gb", "a10": "a10"}[
+            exp_settings.gpu.lower()
+        ]
     else:
         raise ValueError()
     slurm_script = PREFIXES[exp_settings.cluster].format(
@@ -128,13 +129,13 @@ def submit_job(
     )
     if exp_settings.cluster == "local":
         print("Running locally")
-        run(["bash", "-c", slurm_script])
+        run(["bash", "-c", slurm_script], check=False)
         return
     with NamedTemporaryFile(suffix=f"{name}.sh", delete=False) as f:
         pass
     print("Writing to", f.name)
     Path(f.name).write_text(slurm_script)
-    run(["sbatch", f.name])
+    run(["sbatch", f.name], check=False)
 
 
 @exp(1)
