@@ -335,7 +335,7 @@ class GETA(BaseHybridSparseOptimizer):
                 ):  # bias in quantization mapping
                     prune_param_clip_list.append(p.data)
                     prune_param_res_list.append(
-                        torch.tensor([0.0]).to(p.device).expand_as(p.data)
+                        torch.tensor([0.0], device=p.device).expand_as(p.data)
                     )
                     prune_param_grad_list.append(param_group["grad_variant"][p_name])
 
@@ -346,7 +346,7 @@ class GETA(BaseHybridSparseOptimizer):
             if not any(layer_name in p_name for layer_name in layer_name_list):
                 prune_param_clip_list.append(p.data)
                 prune_param_res_list.append(
-                    torch.tensor([0.0]).to(p.device).expand_as(p.data)
+                    torch.tensor([0.0], device=p.device).expand_as(p.data)
                 )
                 prune_param_grad_list.append(param_group["grad_variant"][p_name])
 
@@ -379,74 +379,37 @@ class GETA(BaseHybridSparseOptimizer):
         eps = 1e-8
         cosine_similarity_clip = torch.div(
             torch.dot(flatten_clip, flatten_grad),
-            torch.max(flatten_clip_norm, torch.tensor(eps).to(flatten_clip.device))
+            torch.max(flatten_clip_norm, torch.tensor(eps, device=flatten_clip.device))
             * flatten_grad_norm,
         )
         cosine_similarity_res = torch.div(
             torch.dot(flatten_res, flatten_grad),
-            torch.max(flatten_res_norm, torch.tensor(eps).to(flatten_res.device))
+            torch.max(flatten_res_norm, torch.tensor(eps, device=flatten_res.device))
             * flatten_grad_norm,
         )
 
         eta = 0.999
         zeta = 0.9
-        if torch.mean(flatten_clip).item() < 1e-8:
-            forget_rate = 0.0
-        else:
-            if torch.isinf(cosine_similarity_clip) or torch.isnan(
-                cosine_similarity_clip
-            ):
-                self.logger.warning(
-                    "cosine_similarity_clip is inf or nan, setting forget rate to 0.0"
-                )
-                forget_rate = 0.0
-            elif cosine_similarity_clip >= 0.0 and cosine_similarity_clip <= 1.0:
-                t = (
-                    self.num_steps - self.start_pruning_step
-                ) % self.pruning_period_duration
-                forget_rate = 1.0 - (self.pruning_period_duration - t - 1.0) / (
-                    self.pruning_period_duration - t
-                )
-            elif cosine_similarity_clip >= -1.0 and cosine_similarity_clip < 0.0:
-                forget_rate = (
-                    -(1 - eta)
-                    * param_group["lr"]
-                    * flatten_grad_norm
-                    / (cosine_similarity_clip * flatten_clip_norm)
-                )
-            else:
-                # TODO: @xiaoyi, refactor
-                if self.verbose == "True":
-                    self.logger.warning(
-                        f"Unexpected cosine_similarity_clip value: {cosine_similarity_clip}"
-                    )
-                    outID = "log_info_" + str(self.start_pruning_step)
-                    filename = os.path.join(
-                        "outputs",
-                        f"sparsity_{self.target_group_sparsity * 100}",
-                        f"{outID}.txt",
-                    )
-                    with self.safe_open_file(filename) as logfile:
-                        logfile.write("Throw an error: cosine_similarity_clip error\n")
-                        logfile.write(
-                            f"similarity_value: {cosine_similarity_clip.item():^8.9e}\n"
-                        )
-                        logfile.write(
-                            f"flatten_grad_max: {torch.max(flatten_grad).item():^8.9e}\n"
-                        )
-                        logfile.write(
-                            f"flatten_clip_max: {torch.max(flatten_clip).item():^8.9e}\n"
-                        )
-                        logfile.write(
-                            f"flatten_grad_mean: {torch.mean(flatten_grad).item():^8.9e}\n"
-                        )
-                        logfile.write(
-                            f"flatten_clip_mean: {torch.mean(flatten_clip).item():^8.9e}\n"
-                        )
-                        # logfile.write("all_grad_max: {flatten_grad:^8.9e}\n".format(flatten_grad=torch.max(torch.Tensor(prune_param_grad_list))) )
-                    self.logger.error("Error with computing cosine_similarity_clip!")
-                    assert 1 == 2
-
+        t = (self.num_steps - self.start_pruning_step) % self.pruning_period_duration
+        forget_rate_1 = 1.0 - (self.pruning_period_duration - t - 1.0) / (
+            self.pruning_period_duration - t
+        )
+        forget_rate_2 = (
+            -(1 - eta)
+            * param_group["lr"]
+            * flatten_grad_norm
+            / (cosine_similarity_clip * flatten_clip_norm)
+        )
+        forget_rate = torch.where(
+            (torch.mean(flatten_clip) < 1e-8)
+            | (~torch.isfinite(cosine_similarity_clip)),
+            0.0,
+            torch.where(
+                (cosine_similarity_clip >= 0.0) & (cosine_similarity_clip <= 1.0),
+                forget_rate_1,
+                forget_rate_2,
+            ),
+        )
         # Determine d_quant range
         bit_width_lower = bit_range[0]
         bit_width_upper = bit_range[1]
@@ -455,47 +418,38 @@ class GETA(BaseHybridSparseOptimizer):
         d_quant_lower = self._d_quant_helper(bit_width_upper, all_qms, t_quant)
 
         # Safeguard mechanism for d_quant
-        if cosine_similarity_res >= 0.0 or forget_rate == 0.0:
-            d_quant = d_quant_upper
-        else:
-            d_quant = (
-                -zeta
-                * eta
-                * param_group["lr"]
-                * flatten_grad_norm
-                / (forget_rate * cosine_similarity_res * flatten_res_norm)
-            )
-            while d_quant < d_quant_lower:  # Avoid quant step size d being too small.
-                forget_rate = forget_rate * 0.8
-                d_quant = d_quant / 0.8
-            d_quant = min(
-                d_quant_upper, d_quant
-            )  # Avoid quant step size d being too large.
-        if self.verbose == "True":
-            filename = os.path.join(
-                "outputs",
-                f"sparsity_{self.target_group_sparsity * 100}",
-                f"{outID}.txt",
-            )
-            with self.safe_open_file(filename) as logfile:
-                content = "Step: {num_step:^11s} Layer_name: {name:^30s} clip_max: {clip_max:^8.5e} res_max: {res_max:^8.5e} grad_max: {grad_max:^8.5e} clip_grad: {clip_grad:^8.5e} res_grad: {res_grad:^8.5e} flatten_clip_norm: {flatten_clip_norm:^8.5e} flatten_res_norm: {flatten_res_norm:^8.5e} flatten_grad_norm: {flatten_grad_norm:^8.5e} cos(gamma): {angle_gamma:^8.5e} cos(d):{angle_d:^8.5e} forget_rate: {gamma:^8.5e} d_quant: {d_quant:^8.5e} \n".format(
-                    num_step=str(self.num_steps),
-                    name=layer_name_list[0] if layer_name_list else "N/A",
-                    clip_max=torch.max(flatten_clip).item(),
-                    res_max=torch.max(flatten_res).item(),
-                    grad_max=torch.max(flatten_grad).item(),
-                    clip_grad=torch.dot(flatten_clip, flatten_grad).item(),
-                    res_grad=torch.dot(flatten_res, flatten_grad).item(),
-                    flatten_clip_norm=flatten_clip_norm,
-                    flatten_res_norm=flatten_res_norm,
-                    flatten_grad_norm=flatten_grad_norm,
-                    angle_gamma=cosine_similarity_clip,
-                    angle_d=cosine_similarity_res,
-                    gamma=forget_rate,
-                    d_quant=d_quant,
-                )
-                logfile.write(content)
+        cond = (cosine_similarity_res >= 0.0) | (forget_rate == 0.0)
 
+        d_quant_2 = (
+            -zeta
+            * eta
+            * param_group["lr"]
+            * flatten_grad_norm
+            / (forget_rate * cosine_similarity_res * flatten_res_norm)
+        )
+
+        n_iters = torch.clamp(
+            torch.ceil(
+                (torch.log(d_quant_lower) - torch.log(d_quant_2)) / math.log(1.25)
+            ),
+            min=0,
+        )
+
+        d_quant_2 = torch.minimum(d_quant_2 * torch.pow(1.25, n_iters), d_quant_upper)
+
+        forget_rate_2 = forget_rate * torch.pow(0.8, n_iters)
+
+        d_quant = torch.where(
+            cond,
+            d_quant_upper,
+            d_quant_2,
+        )
+
+        forget_rate = torch.where(
+            cond,
+            forget_rate,
+            forget_rate_2,
+        )
         return forget_rate, d_quant
 
     def get_bitwidth_dict(self, param_group):
@@ -816,30 +770,6 @@ class GETA(BaseHybridSparseOptimizer):
         output = torch.sign(weight) * output
 
         return output
-
-    def log_qm_projection(self):
-        """Log q_m during projection"""
-        if (
-            self.num_steps >= self.start_projection_step
-            and self.num_steps <= self.start_projection_step + self.projection_steps
-            and self.num_steps % 1000 == 0
-        ):
-            log_file = os.path.join(self.log_dir, f"projection_qm_{self.num_steps}.txt")
-            with self.safe_open_file(log_file, "w") as f:
-                curr_period = (
-                    self.num_steps - self.start_projection_step
-                ) // self.projection_period_duration
-                f.write(f"Step: {self.num_steps}, Projection Period: {curr_period}\n")
-                f.write(f"Current max_bit_wt: {self.max_bit_wt}\n\n")
-
-                for group in self.param_groups:
-                    for p_name, p in zip(group["p_names"], group["params"]):
-                        if "q_m_wt" in p_name:
-                            layer_name = ".".join(p_name.split(".")[:-1])
-                            f.write(f"Layer: {layer_name}\n")
-                            f.write(f"q_m stats: min={p.data.min().item():.6f}, ")
-                            f.write(f"max={p.data.max().item():.6f}, ")
-                            f.write(f"mean={p.data.mean().item():.6f}\n\n")
 
     def step(self, loss=None, closure=None):
         """

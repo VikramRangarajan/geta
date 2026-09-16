@@ -177,7 +177,7 @@ def get_data_loader(
 
         train = load_dataset(hf_uri, split="train", keep_in_memory=True)
         trainset = train.with_transform(get_transform_fn(transform_train))
-        test = load_dataset(hf_uri, split="test", keep_in_memory=True)
+        test = load_dataset(hf_uri, split="validation", keep_in_memory=True)
         testset = test.with_transform(get_transform_fn(transform_test))
     else:
         raise ValueError("Unsupported dataset")
