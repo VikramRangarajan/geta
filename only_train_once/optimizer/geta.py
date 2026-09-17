@@ -334,9 +334,7 @@ class GETA(BaseHybridSparseOptimizer):
                     layer_name in p_name and p_transform != 1
                 ):  # bias in quantization mapping
                     prune_param_clip_list.append(p.data)
-                    prune_param_res_list.append(
-                        torch.tensor([0.0], device=p.device).expand_as(p.data)
-                    )
+                    prune_param_res_list.append(torch.zeros_like(p.data))
                     prune_param_grad_list.append(param_group["grad_variant"][p_name])
 
         ###########################################
@@ -345,9 +343,7 @@ class GETA(BaseHybridSparseOptimizer):
         for p_name, p in zip(param_group["p_names"], param_group["params"]):
             if not any(layer_name in p_name for layer_name in layer_name_list):
                 prune_param_clip_list.append(p.data)
-                prune_param_res_list.append(
-                    torch.tensor([0.0], device=p.device).expand_as(p.data)
-                )
+                prune_param_res_list.append(torch.zeros_like(p.data))
                 prune_param_grad_list.append(param_group["grad_variant"][p_name])
 
         # Access values at redundant indices
@@ -379,13 +375,11 @@ class GETA(BaseHybridSparseOptimizer):
         eps = 1e-8
         cosine_similarity_clip = torch.div(
             torch.dot(flatten_clip, flatten_grad),
-            flatten_clip_norm.clamp(min=eps)
-            * flatten_grad_norm
+            flatten_clip_norm.clamp(min=eps) * flatten_grad_norm,
         )
         cosine_similarity_res = torch.div(
             torch.dot(flatten_res, flatten_grad),
-            flatten_res_norm.clamp(min=eps)
-            * flatten_grad_norm
+            flatten_res_norm.clamp(min=eps) * flatten_grad_norm,
         )
 
         eta = 0.999
@@ -734,8 +728,10 @@ class GETA(BaseHybridSparseOptimizer):
         range_pow = torch.exp(t_quant * torch.log(abs(q_m - q_s)))
         input_pow = torch.exp(t_quant * torch.log(weight_abs - q_s))  # weight_abs > q_s
         output = d_quant * torch.round(input_pow.div(d_quant))
-        output[weight_abs <= q_s] = 0
-        output[weight_abs >= q_m] = d_quant * torch.round(range_pow.div(d_quant))
+        output = torch.where(weight_abs <= q_s, 0, output)
+        output = torch.where(
+            weight_abs >= q_m, d_quant * torch.round(range_pow.div(d_quant)), output
+        )
         output = torch.sign(weight) * output
 
         return output
@@ -748,8 +744,8 @@ class GETA(BaseHybridSparseOptimizer):
         q_s = 0.0
         range_pow = torch.exp(t_quant * torch.log(abs(q_m - q_s)))
         output = torch.exp(t_quant * torch.log(weight_abs - q_s))  # weight_abs > q_s
-        output[weight_abs <= q_s] = 0
-        output[weight_abs >= q_m] = range_pow
+        output = torch.where(weight_abs <= q_s, 0, output)
+        output = torch.where(weight_abs >= q_m, range_pow, output)
         output = torch.sign(weight) * output
 
         return output
@@ -763,14 +759,17 @@ class GETA(BaseHybridSparseOptimizer):
         range_pow = torch.exp(t_quant * torch.log(abs(q_m - q_s)))
         input_pow = torch.exp(t_quant * torch.log(weight_abs - q_s))  # weight_abs > q_s
         output = torch.round(input_pow.div(d_quant)) - input_pow.div(d_quant)
-        output[weight_abs <= q_s] = 0
-        output[weight_abs >= q_m] = torch.round(range_pow.div(d_quant)) - range_pow.div(
-            d_quant
+        output = torch.where(weight_abs <= q_s, 0, output)
+        output = torch.where(
+            weight_abs >= q_m,
+            torch.round(range_pow.div(d_quant)) - range_pow.div(d_quant),
+            output,
         )
         output = torch.sign(weight) * output
 
         return output
 
+    @torch.compile(fullgraph=False)
     def step(self, loss=None, closure=None):
         """
         Core function.
@@ -781,10 +780,6 @@ class GETA(BaseHybridSparseOptimizer):
 
         self.num_steps += 1
         self.compute_grad_variant()
-        self._step(loss)
-
-    @torch.compile(fullgraph=False)
-    def _step(self, loss=None):
         # Determine the bit range projection for weights
         if (
             self.num_steps >= self.start_projection_step

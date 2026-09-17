@@ -49,8 +49,10 @@ class SymQuantizerNonLinear(torch.autograd.Function):
         input_pow = torch.exp(t_quant * torch.log(input_abs - q_s))  # input_abs >= q_s
 
         output = d_quant * torch.round(input_pow.div(d_quant))
-        output[input_abs <= q_s] = 0
-        output[input_abs >= q_m] = d_quant * torch.round(range_pow.div(d_quant))
+        output = torch.where(input_abs <= q_s, 0, output)
+        output = torch.where(
+            input_abs >= q_m, d_quant * torch.round(range_pow.div(d_quant)), output
+        )
         output = torch.sign(input) * output
         return output
 
@@ -72,20 +74,26 @@ class SymQuantizerNonLinear(torch.autograd.Function):
         input_pow = torch.exp(t_quant * torch.log(input_abs - q_s))  # input_abs >= q_s
 
         grad_d_xq = torch.round(input_pow.div(d_quant)) - input_pow.div(d_quant)
-        grad_d_xq[input_abs >= q_m] = torch.round(
-            range_pow.div(d_quant)
-        ) - range_pow.div(d_quant)
-        grad_d_xq[input_abs <= q_s] = 0
+        grad_d_xq = torch.where(
+            input_abs >= q_m,
+            torch.round(range_pow.div(d_quant)) - range_pow.div(d_quant),
+            grad_d_xq,
+        )
+        grad_d_xq = torch.where(input_abs <= q_s, 0, grad_d_xq)
         grad_d_xq = torch.sign(input) * grad_d_xq
         grad_d = torch.sum(grad_output * grad_d_xq).reshape(1)
 
         grad_qm_xq = torch.sign(input) * ((t_quant * range_pow_low).expand_as(input))
-        grad_qm_xq[input_abs <= q_m] = 0
+        grad_qm_xq = torch.where(input_abs <= q_m, 0, grad_qm_xq)
         grad_qm = torch.sum(grad_output * grad_qm_xq).reshape(1)
 
         grad_t_xq = input_pow * (torch.log(input_abs - q_s))
-        grad_t_xq[input_abs >= q_m] = range_pow * torch.log(torch.abs(q_m - q_s) + 1e-6)
-        grad_t_xq[input_abs <= q_s] = 0
+        grad_t_xq = torch.where(
+            input_abs >= q_m,
+            range_pow * torch.log(torch.abs(q_m - q_s) + 1e-6),
+            grad_t_xq,
+        )
+        grad_t_xq = torch.where(input_abs <= q_s, 0, grad_t_xq)
         grad_t_xq = torch.sign(input) * grad_t_xq
         grad_t = torch.sum(grad_output * grad_t_xq).reshape(1)
         return grad_x, grad_d, grad_qm, grad_t, None, None
@@ -115,34 +123,37 @@ class SymQuantizerLinear(torch.autograd.Function):
         input_pow = input_abs - q_s  # input_abs >= q_s
 
         output = d_quant * torch.round(input_pow.div(d_quant))
-        output[input_abs <= q_s] = 0
-        output[input_abs >= q_m] = d_quant * torch.round(range_pow.div(d_quant))
+        output = torch.where(input_abs <= q_s, 0, output)
+        output = torch.where(
+            input_abs >= q_m, d_quant * torch.round(range_pow.div(d_quant)), output
+        )
         output = torch.sign(input) * output
         return output
 
     @staticmethod
-    def backward(ctx, grad_output) -> tuple[torch.Tensor]:
+    def backward(ctx, grad_output: torch.Tensor) -> tuple[torch.Tensor]:
         input, d_quant, q_m, clip_val, q_s = ctx.saved_tensors
         input_abs = torch.abs(input)
 
         grad_x = grad_output.clone()
-        grad_x[input.ge(clip_val[1])] = 0
-        grad_x[input.le(clip_val[0])] = 0
+        grad_x.clamp_(min=clip_val[0], max=clip_val[1])
 
         # Useful quantities
         range_pow = torch.abs(q_m - q_s)  # q_m <= q_s can happen
         input_pow = input_abs - q_s  # input_abs >= q_s
 
         grad_d_xq = torch.round(input_pow.div(d_quant)) - input_pow.div(d_quant)
-        grad_d_xq[input_abs >= q_m] = torch.round(
-            range_pow.div(d_quant)
-        ) - range_pow.div(d_quant)
-        grad_d_xq[input_abs <= q_s] = 0
+        grad_d_xq = torch.where(
+            input_abs >= q_m,
+            torch.round(range_pow.div(d_quant)) - range_pow.div(d_quant),
+            grad_d_xq,
+        )
+        grad_d_xq = torch.where(input_abs <= q_s, 0, grad_d_xq)
         grad_d_xq = torch.sign(input) * grad_d_xq
         grad_d = torch.sum(grad_output * grad_d_xq).reshape(1)
 
         grad_qm_xq = torch.sign(input)
-        grad_qm_xq[input_abs <= q_m] = 0
+        grad_qm_xq = torch.where(input_abs <= q_m, 0, grad_qm_xq)
         grad_qm = torch.sum(grad_output * grad_qm_xq).reshape(1)
 
         return grad_x, grad_d, grad_qm, None, None
@@ -177,8 +188,10 @@ class DGEQuantizer(torch.autograd.Function):
         input_pow = input_abs - q_s  # input_abs >= q_s
 
         output = d_quant * torch.round(input_pow.div(d_quant))
-        output[input_abs <= q_s] = 0
-        output[input_abs >= q_m] = d_quant * torch.round(range_pow.div(d_quant))
+        output = torch.where(input_abs <= q_s, 0, output)
+        output = torch.where(
+            input_abs >= q_m, d_quant * torch.round(range_pow.div(d_quant)), output
+        )
         output = torch.sign(input) * output
         return output
 
@@ -204,16 +217,18 @@ class DGEQuantizer(torch.autograd.Function):
         range_pow = torch.abs(q_m - q_s)
         input_pow = input_abs - q_s
         grad_d_xq = torch.round(input_pow.div(d_quant)) - input_pow.div(d_quant)
-        grad_d_xq[input_abs >= q_m] = torch.round(
-            range_pow.div(d_quant)
-        ) - range_pow.div(d_quant)
-        grad_d_xq[input_abs <= q_s] = 0
+        grad_d_xq = torch.where(
+            input_abs >= q_m,
+            torch.round(range_pow.div(d_quant)) - range_pow.div(d_quant),
+            grad_d_xq,
+        )
+        grad_d_xq = torch.where(input_abs <= q_s, 0, grad_d_xq)
         grad_d_xq = torch.sign(input) * grad_d_xq
         grad_d = torch.sum(grad_output * grad_d_xq).reshape(1)
 
         # Compute q_m gradient
         grad_qm_xq = torch.sign(input)
-        grad_qm_xq[input_abs <= q_m] = 0
+        grad_qm_xq = torch.where(input_abs <= q_m, 0, grad_qm_xq)
         grad_qm = torch.sum(grad_output * grad_qm_xq).reshape(1)
 
         return grad_x, grad_d, grad_qm, None, None, None
